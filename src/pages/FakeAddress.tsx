@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { SeoHead } from '../components/SeoHead';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { Copy, Check, Sparkles, MapPin, UserSquare2, Phone, Hash, Globe, Loader2, FileCode2, Database, Shield } from 'lucide-react';
+import { Copy, Check, Sparkles, MapPin, UserSquare2, Phone, Hash, Globe, Loader2, FileCode2, Database, Shield, ChevronRight, ArrowLeft } from 'lucide-react';
 
-const LOCALE_NAMES: Record<string, string> = {
-  af_ZA: "Afrikaans (South Africa)", ar: "Arabic", az: "Azerbaijani", bn_BD: "Bengali (Bangladesh)",
-  cs_CZ: "Czech (Czechia)", cy: "Welsh", da: "Danish", de: "German", de_AT: "German (Austria)",
-  de_CH: "German (Switzerland)", dv: "Maldivian", el: "Greek", en: "English", en_AU: "English (Australia)",
-  en_US: "English (United States)", en_GB: "English (Great Britain)", en_CA: "English (Canada)",
-  es: "Spanish", es_MX: "Spanish (Mexico)", fr: "French", fr_CA: "French (Canada)",
-  it: "Italian", ja: "Japanese", ko: "Korean", nl: "Dutch", pt_BR: "Portuguese (Brazil)",
-  ru: "Russian", zh_CN: "Chinese (China)"
-  // Truncated list for cleaner UI, full list preserved in previous iterations
+const SUPPORTED_LOCALES: Record<string, { code: string; name: string; region: string; flag: string }> = {
+  'us': { code: 'en_US', name: 'United States', region: 'North America', flag: '🇺🇸' },
+  'ca': { code: 'en_CA', name: 'Canada', region: 'North America', flag: '🇨🇦' },
+  'mx': { code: 'es_MX', name: 'Mexico', region: 'North America', flag: '🇲🇽' },
+  'gb': { code: 'en_GB', name: 'United Kingdom', region: 'Europe', flag: '🇬🇧' },
+  'de': { code: 'de', name: 'Germany', region: 'Europe', flag: '🇩🇪' },
+  'fr': { code: 'fr', name: 'France', region: 'Europe', flag: '🇫🇷' },
+  'it': { code: 'it', name: 'Italy', region: 'Europe', flag: '🇮🇹' },
+  'es': { code: 'es', name: 'Spain', region: 'Europe', flag: '🇪🇸' },
+  'nl': { code: 'nl', name: 'Netherlands', region: 'Europe', flag: '🇳🇱' },
+  'ru': { code: 'ru', name: 'Russia', region: 'Europe', flag: '🇷🇺' },
+  'au': { code: 'en_AU', name: 'Australia', region: 'Oceania', flag: '🇦🇺' },
+  'br': { code: 'pt_BR', name: 'Brazil', region: 'South America', flag: '🇧🇷' },
+  'jp': { code: 'ja', name: 'Japan', region: 'Asia', flag: '🇯🇵' },
+  'kr': { code: 'ko', name: 'South Korea', region: 'Asia', flag: '🇰🇷' },
+  'cn': { code: 'zh_CN', name: 'China', region: 'Asia', flag: '🇨🇳' },
+  'in': { code: 'en_IND', name: 'India', region: 'Asia', flag: '🇮🇳' },
+  'bd': { code: 'bn_BD', name: 'Bangladesh', region: 'Asia', flag: '🇧🇩' },
+  'za': { code: 'af_ZA', name: 'South Africa', region: 'Africa', flag: '🇿🇦' },
+  'ng': { code: 'en_NG', name: 'Nigeria', region: 'Africa', flag: '🇳🇬' },
+  'ae': { code: 'ar', name: 'United Arab Emirates', region: 'Middle East', flag: '🇦🇪' },
+  'sa': { code: 'ar', name: 'Saudi Arabia', region: 'Middle East', flag: '🇸🇦' },
+  'tr': { code: 'tr', name: 'Turkey', region: 'Middle East', flag: '🇹🇷' }
 };
 
 type Identity = {
@@ -22,20 +37,31 @@ type Identity = {
 const FAQ_DATA = [
   { question: "What is a fake address generator used for?", answer: "A mock identity or fake address generator is utilized by developers, QA testers, and designers to populate databases, prototype applications, and perform form validation without exposing real PII (Personally Identifiable Information)." },
   { question: "Are these identities real people?", answer: "No. The data is entirely synthesized algorithmically using common regional name patterns and realistic (but dummy) street formats. It prevents privacy leaks in development environments." },
-  { question: "How many regional locales are supported?", answer: "Our engine supports over 70 global locales. It generates culturally accurate names, appropriate state/province abbreviations, and correct postal code formats for regions ranging from the United States to Japan." }
+  { question: "How many regional locales are supported?", answer: "The localization engine supports rigorous regional constraints, generating culturally accurate names, appropriate state/province abbreviations, and correct postal code formats for regions worldwide." }
 ];
 
 export default function FakeAddress() {
-  const [selectedLocale, setSelectedLocale] = useState('en_US');
+  const { locale } = useParams<{ locale: string }>();
+  const navigate = useNavigate();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const { copiedText, copy } = useCopyToClipboard();
 
+  useEffect(() => {
+    if (locale && !SUPPORTED_LOCALES[locale]) {
+      navigate('/fake-address', { replace: true });
+    }
+  }, [locale, navigate]);
+
+  const activeLocaleData = locale ? SUPPORTED_LOCALES[locale] : null;
+
   const generateIdentity = async () => {
+    if (!activeLocaleData) return;
     setIsGenerating(true);
+    
     try {
       const { allFakers } = await import('@faker-js/faker');
-      const faker = allFakers[selectedLocale as keyof typeof allFakers] || allFakers['en_US'];
+      const faker = allFakers[activeLocaleData.code as keyof typeof allFakers] || allFakers['en_US'];
 
       const safeCall = (fn: () => string, fallback: string = 'N/A') => {
         try { const res = fn(); return res === null || res === undefined || res.trim() === '' ? fallback : res; } 
@@ -59,105 +85,133 @@ export default function FakeAddress() {
   const formattedOutput = identity ? 
     `${identity.fullName}\n${identity.street}\n${identity.city}, ${identity.state !== 'N/A' ? identity.state + ' ' : ''}${identity.zip}\nPhone: ${identity.phone}\nID Vector: ${identity.idNumber}` : '';
 
+  if (!locale) {
+    const groupedLocales = Object.entries(SUPPORTED_LOCALES).reduce((acc, [slug, data]) => {
+      if (!acc[data.region]) acc[data.region] = [];
+      acc[data.region].push({ slug, ...data });
+      return acc;
+    }, {} as Record<string, Array<{ slug: string; code: string; name: string; flag: string; }>>);
+
+    return (
+      <div className="max-w-6xl mx-auto md:py-8 animation-fade-in">
+        <SeoHead 
+          title="Fake Address Generator Directory | Global Mock Identities" 
+          description="Browse and generate localized fake addresses, random names, and dummy profiles for specific global regions. Comprehensive mock identity tools for developers." 
+          keywords="fake address generator directory, global mock identity, random address by country, test user profiles"
+          isTool={true}
+          faqData={FAQ_DATA}
+        />
+        
+        <div className="mb-10 text-center max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-6">
+            <Globe className="size-3.5 fill-current" /> Global Identity Engine
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Select Localization Profile</h1>
+          <p className="text-lg text-zinc-500 dark:text-zinc-400">Choose a specific region to generate culturally accurate mock identities and mathematically valid regional address formats.</p>
+        </div>
+
+        <div className="grid gap-12 mb-16">
+          {Object.entries(groupedLocales).sort(([a], [b]) => a.localeCompare(b)).map(([region, locales]) => (
+            <section key={region}>
+              <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <MapPin className="size-4" /> {region}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {locales.sort((a, b) => a.name.localeCompare(b.name)).map(loc => (
+                  <Link 
+                    key={loc.slug} 
+                    to={`/fake-address/${loc.slug}`}
+                    className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl filter drop-shadow-sm">{loc.flag}</span>
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-orange-500 transition-colors">{loc.name}</span>
+                    </div>
+                    <ChevronRight className="size-4 text-zinc-300 dark:text-zinc-700 group-hover:text-orange-500 transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto md:py-8 animation-fade-in">
       <SeoHead 
-        title="Fake Address Generator | Mock Identity & Dummy Data API" 
-        description="Generate localized fake addresses, random names, and dummy profiles for over 70 global regions. Best mock identity generator for QA testing and database seeding." 
-        keywords="fake address generator, random address generator, mock identity generator, dummy data generator, test user profile generator, random name generator"
+        title={`${activeLocaleData?.name} Fake Address Generator | Mock Identity API`}
+        description={`Generate localized fake addresses, random names, and dummy profiles specifically for ${activeLocaleData?.name}. High-fidelity mock identity vectors for QA testing.`}
+        keywords={`fake address generator ${activeLocaleData?.name}, random address ${activeLocaleData?.name}, mock identity ${activeLocaleData?.name}, dummy data ${activeLocaleData?.name}`}
         isTool={true}
         faqData={FAQ_DATA}
       />
       
-      {/* Header */}
       <div className="mb-8 md:mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4">
-          <UserSquare2 className="size-3.5 fill-current" /> Identity Engine
+        <Link to="/fake-address" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6">
+          <ArrowLeft className="size-4" /> Back to Global Directory
+        </Link>
+        
+        <div className="flex items-center gap-4 mb-4">
+          <span className="text-4xl filter drop-shadow-md">{activeLocaleData?.flag}</span>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{activeLocaleData?.name} Identity Generator</h1>
         </div>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Global Identity Generator</h1>
-        <p className="text-lg text-zinc-500 dark:text-zinc-400">Instantly generate structurally valid identity vectors and localized addresses across global regions for software testing.</p>
+        <p className="text-lg text-zinc-500 dark:text-zinc-400">Instantly generate structurally valid identity vectors and localized addresses strictly conforming to {activeLocaleData?.name} formats.</p>
       </div>
 
-      {/* Main Tool UI */}
       <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 p-6 md:p-10 mb-16">
         
-        <div className="mb-8">
-          <label className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
-            <Globe className="size-4" /> Localization Profile
-          </label>
-          <div className="relative">
-            <select value={selectedLocale} onChange={(e) => setSelectedLocale(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-4 pr-10 py-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-500/50 transition-all cursor-pointer shadow-sm appearance-none">
-              {Object.entries(LOCALE_NAMES).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => (
-                <option key={code} value={code}>{name} ({code})</option>
-              ))}
-            </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400"><Globe className="size-5" /></div>
-          </div>
-        </div>
-
         {identity ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800">
-            <div className="space-y-4">
-              <div><label className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase mb-1"><UserSquare2 className="size-3.5" /> Full Name</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.fullName}</div></div>
-              <div><label className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase mb-1"><Phone className="size-3.5" /> Phone Number</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono">{identity.phone}</div></div>
-              <div><label className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase mb-1"><Hash className="size-3.5" /> ID Vector</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono">{identity.idNumber}</div></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 md:p-8 border border-zinc-100 dark:border-zinc-800 shadow-inner">
+            <div className="space-y-5">
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><UserSquare2 className="size-3.5" /> Full Name</label><div className="text-xl font-bold text-zinc-900 dark:text-white">{identity.fullName}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Phone className="size-3.5" /> Phone Number</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.phone}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Hash className="size-3.5" /> Identity Vector ID</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.idNumber}</div></div>
             </div>
-            <div className="space-y-4 md:border-l border-zinc-200 dark:border-zinc-800 md:pl-6">
-              <div><label className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase mb-1"><MapPin className="size-3.5" /> Street Address</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.street}</div></div>
-              <div><label className="text-xs font-bold text-zinc-400 uppercase mb-1 block">City & State</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.city}{identity.state !== 'N/A' ? `, ${identity.state}` : ''}</div></div>
-              <div><label className="text-xs font-bold text-zinc-400 uppercase mb-1 block">Postal Code</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono">{identity.zip}</div></div>
+            <div className="space-y-5 md:border-l border-zinc-200 dark:border-zinc-800 md:pl-8">
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><MapPin className="size-3.5" /> Street Address</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.street}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">City & Region</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.city}{identity.state !== 'N/A' ? `, ${identity.state}` : ''}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Postal Code</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.zip}</div></div>
             </div>
           </div>
         ) : (
           <div className="h-64 flex flex-col items-center justify-center bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl border border-zinc-200 dark:border-zinc-800 border-dashed mb-8 transition-colors">
-            <UserSquare2 className="size-16 text-zinc-300 dark:text-zinc-700 mb-4" />
-            <p className="text-zinc-500 font-medium">Click generate to create a localized identity vector.</p>
+            <span className="text-6xl filter drop-shadow-sm mb-4 grayscale opacity-50">{activeLocaleData?.flag}</span>
+            <p className="text-zinc-500 font-medium">System ready. Click generate to construct a localized profile.</p>
           </div>
         )}
         
         <div className="flex flex-col sm:flex-row gap-4">
           <button onClick={generateIdentity} disabled={isGenerating} className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-base font-bold rounded-2xl hover:bg-orange-500 dark:hover:bg-orange-500 dark:hover:text-white transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-70">
             {isGenerating ? <Loader2 className="size-5 animate-spin" /> : <Sparkles className="size-5" />}
-            {isGenerating ? 'Synthesizing...' : 'Generate Vector'}
+            {isGenerating ? 'Synthesizing Profile...' : `Generate ${activeLocaleData?.name} Profile`}
           </button>
           <button onClick={() => copy(formattedOutput)} disabled={!identity || isGenerating} className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 text-base font-bold rounded-2xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${copiedText ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white dark:bg-[#0a0a0a] text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm'}`}>
             {copiedText ? <Check className="size-5" /> : <Copy className="size-5" />}
-            {copiedText ? 'Copied Data' : 'Copy All'}
+            {copiedText ? 'Vector Copied' : 'Copy Full Data'}
           </button>
         </div>
       </div>
 
-      {/* Deep SEO Content Section */}
       <article className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Why Use a Random Identity Generator?</h2>
+        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Why Use a Localized Identity Generator?</h2>
         
         <div className="grid md:grid-cols-3 gap-8 mb-12">
           <div className="space-y-3">
             <div className="size-10 bg-orange-500/10 rounded-lg flex items-center justify-center text-orange-500 border border-orange-500/20 mb-4"><Database className="size-5" /></div>
             <h3 className="font-bold text-lg">Database Seeding</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Instantly populate pre-production databases with thousands of records. Ensures that pagination, sorting, and search algorithms can be tested comprehensively before launch.</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Instantly populate pre-production databases with thousands of localized records. Ensures that pagination, sorting, and regional search algorithms can be tested comprehensively before launch.</p>
           </div>
           <div className="space-y-3">
             <div className="size-10 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500 border border-blue-500/20 mb-4"><FileCode2 className="size-5" /></div>
-            <h3 className="font-bold text-lg">Form Validation</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">QA teams require accurately formatted edge-case addresses to stress-test UI inputs. Generate complex international postal codes and regional phone formatting.</p>
+            <h3 className="font-bold text-lg">Strict Form Validation</h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">QA teams require accurately formatted edge-case addresses to stress-test UI inputs. Generate complex international postal codes and distinct regional phone formatting patterns securely.</p>
           </div>
           <div className="space-y-3">
             <div className="size-10 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 border border-emerald-500/20 mb-4"><Shield className="size-5" /></div>
-            <h3 className="font-bold text-lg">Maintain Privacy</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Prevent data leaks and GDPR violations. By using synthesized mock identities, you guarantee that no real PII (Personally Identifiable Information) ever enters your staging environments.</p>
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-200 dark:border-zinc-800 pt-10">
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6 flex items-center gap-2"><Globe className="size-6 text-orange-500" /> Frequently Asked Questions</h2>
-          <div className="grid gap-6">
-            {FAQ_DATA.map((faq, i) => (
-              <div key={i} className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800">
-                <h3 className="font-bold text-lg mb-2 text-zinc-900 dark:text-zinc-100">{faq.question}</h3>
-                <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">{faq.answer}</p>
-              </div>
-            ))}
+            <h3 className="font-bold text-lg">Maintain Compliance</h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Prevent data leaks and GDPR violations. By utilizing synthesized mock identities, guarantee that no real PII (Personally Identifiable Information) enters non-production environments.</p>
           </div>
         </div>
       </article>
