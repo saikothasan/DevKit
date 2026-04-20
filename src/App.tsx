@@ -30,6 +30,7 @@ export default function App() {
             {/* Utility / Tool Routes */}
             <Route path="test-cards" element={<TestCards />} />
             <Route path="fake-address" element={<FakeAddress />} />
+            <Route path="fake-address/:locale" element={<FakeAddress />} />
             <Route path="card-checker" element={<CardChecker />} />
             <Route path="bin-checker" element={<BinChecker />} />
             
