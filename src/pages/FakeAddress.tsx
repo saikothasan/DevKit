@@ -2,101 +2,54 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { SeoHead } from '../components/SeoHead';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { Copy, Check, Sparkles, MapPin, UserSquare2, Phone, Hash, Globe, Loader2, FileCode2, Database, Shield, ChevronRight, ArrowLeft } from 'lucide-react';
+import { 
+  Copy, Check, Sparkles, MapPin, UserSquare2, Phone, Hash, Globe, 
+  Loader2, FileCode2, Database, Shield, ChevronRight, ArrowLeft,
+  Mail, Calendar, Briefcase, Building2
+} from 'lucide-react';
+
+// Static import replacing the dynamic import
+import { allFakers } from '@faker-js/faker';
 
 const SUPPORTED_LOCALES: Record<string, { code: string; name: string; region: string; flag: string }> = {
-  // North America
   'us': { code: 'en_US', name: 'United States', region: 'North America', flag: '🇺🇸' },
-  'ca': { code: 'en_CA', name: 'Canada (English)', region: 'North America', flag: '🇨🇦' },
-  'fr-ca': { code: 'fr_CA', name: 'Canada (French)', region: 'North America', flag: '🇨🇦' },
+  'ca': { code: 'en_CA', name: 'Canada', region: 'North America', flag: '🇨🇦' },
   'mx': { code: 'es_MX', name: 'Mexico', region: 'North America', flag: '🇲🇽' },
-  
-  // South America
-  'br': { code: 'pt_BR', name: 'Brazil', region: 'South America', flag: '🇧🇷' },
-  
-  // Europe
-  'cz': { code: 'cs_CZ', name: 'Czechia', region: 'Europe', flag: '🇨🇿' },
-  'cy': { code: 'cy', name: 'Wales', region: 'Europe', flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿' },
-  'dk': { code: 'da', name: 'Denmark', region: 'Europe', flag: '🇩🇰' },
+  'gb': { code: 'en_GB', name: 'United Kingdom', region: 'Europe', flag: '🇬🇧' },
   'de': { code: 'de', name: 'Germany', region: 'Europe', flag: '🇩🇪' },
-  'at': { code: 'de_AT', name: 'Austria', region: 'Europe', flag: '🇦🇹' },
-  'ch': { code: 'de_CH', name: 'Switzerland (German)', region: 'Europe', flag: '🇨🇭' },
-  'gr': { code: 'el', name: 'Greece', region: 'Europe', flag: '🇬🇷' },
-  'gb': { code: 'en_GB', name: 'Great Britain', region: 'Europe', flag: '🇬🇧' },
-  'ie': { code: 'en_IE', name: 'Ireland', region: 'Europe', flag: '🇮🇪' },
-  'es': { code: 'es', name: 'Spain', region: 'Europe', flag: '🇪🇸' },
-  'fi': { code: 'fi', name: 'Finland', region: 'Europe', flag: '🇫🇮' },
   'fr': { code: 'fr', name: 'France', region: 'Europe', flag: '🇫🇷' },
-  'be': { code: 'fr_BE', name: 'Belgium (French)', region: 'Europe', flag: '🇧🇪' },
-  'ch-fr': { code: 'fr_CH', name: 'Switzerland (French)', region: 'Europe', flag: '🇨🇭' },
-  'lu': { code: 'fr_LU', name: 'Luxembourg', region: 'Europe', flag: '🇱🇺' },
-  'hr': { code: 'hr', name: 'Croatia', region: 'Europe', flag: '🇭🇷' },
-  'hu': { code: 'hu', name: 'Hungary', region: 'Europe', flag: '🇭🇺' },
   'it': { code: 'it', name: 'Italy', region: 'Europe', flag: '🇮🇹' },
-  'lv': { code: 'lv', name: 'Latvia', region: 'Europe', flag: '🇱🇻' },
-  'mk': { code: 'mk', name: 'North Macedonia', region: 'Europe', flag: '🇲🇰' },
-  'no': { code: 'nb_NO', name: 'Norway', region: 'Europe', flag: '🇳🇴' },
+  'es': { code: 'es', name: 'Spain', region: 'Europe', flag: '🇪🇸' },
   'nl': { code: 'nl', name: 'Netherlands', region: 'Europe', flag: '🇳🇱' },
-  'nl-be': { code: 'nl_BE', name: 'Belgium (Dutch)', region: 'Europe', flag: '🇧🇪' },
-  'pl': { code: 'pl', name: 'Poland', region: 'Europe', flag: '🇵🇱' },
-  'pt': { code: 'pt_PT', name: 'Portugal', region: 'Europe', flag: '🇵🇹' },
-  'ro': { code: 'ro', name: 'Romania', region: 'Europe', flag: '🇷🇴' },
-  'md': { code: 'ro_MD', name: 'Moldova', region: 'Europe', flag: '🇲🇩' },
   'ru': { code: 'ru', name: 'Russia', region: 'Europe', flag: '🇷🇺' },
-  'sk': { code: 'sk', name: 'Slovakia', region: 'Europe', flag: '🇸🇰' },
-  'si': { code: 'sl_SI', name: 'Slovenia', region: 'Europe', flag: '🇸🇮' },
-  'rs': { code: 'sr_RS_latin', name: 'Serbia (Latin)', region: 'Europe', flag: '🇷🇸' },
-  'se': { code: 'sv', name: 'Sweden', region: 'Europe', flag: '🇸🇪' },
-  'ua': { code: 'uk', name: 'Ukraine', region: 'Europe', flag: '🇺🇦' },
-
-  // Asia
-  'bd': { code: 'bn_BD', name: 'Bangladesh', region: 'Asia', flag: '🇧🇩' },
-  'mv': { code: 'dv', name: 'Maldives', region: 'Asia', flag: '🇲🇻' },
-  'hk': { code: 'en_HK', name: 'Hong Kong', region: 'Asia', flag: '🇭🇰' },
-  'in': { code: 'en_IN', name: 'India (English)', region: 'Asia', flag: '🇮🇳' },
-  'in-ta': { code: 'ta_IN', name: 'India (Tamil)', region: 'Asia', flag: '🇮🇳' },
-  'id': { code: 'id_ID', name: 'Indonesia', region: 'Asia', flag: '🇮🇩' },
+  'au': { code: 'en_AU', name: 'Australia', region: 'Oceania', flag: '🇦🇺' },
+  'br': { code: 'pt_BR', name: 'Brazil', region: 'South America', flag: '🇧🇷' },
   'jp': { code: 'ja', name: 'Japan', region: 'Asia', flag: '🇯🇵' },
   'kr': { code: 'ko', name: 'South Korea', region: 'Asia', flag: '🇰🇷' },
-  'np': { code: 'ne', name: 'Nepal', region: 'Asia', flag: '🇳🇵' },
-  'th': { code: 'th', name: 'Thailand', region: 'Asia', flag: '🇹🇭' },
-  'vn': { code: 'vi', name: 'Vietnam', region: 'Asia', flag: '🇻🇳' },
   'cn': { code: 'zh_CN', name: 'China', region: 'Asia', flag: '🇨🇳' },
-  'tw': { code: 'zh_TW', name: 'Taiwan', region: 'Asia', flag: '🇹🇼' },
-
-  // Middle East & Central Asia
-  'ar': { code: 'ar', name: 'Arabic (Generic)', region: 'Middle East', flag: '🇦🇪' },
-  'az': { code: 'az', name: 'Azerbaijan', region: 'Middle East', flag: '🇦🇿' },
-  'ir': { code: 'fa', name: 'Iran (Farsi)', region: 'Middle East', flag: '🇮🇷' },
-  'il': { code: 'he', name: 'Israel (Hebrew)', region: 'Middle East', flag: '🇮🇱' },
-  'am': { code: 'hy', name: 'Armenia', region: 'Middle East', flag: '🇦🇲' },
-  'ge': { code: 'ka_GE', name: 'Georgia', region: 'Middle East', flag: '🇬🇪' },
-  'iq': { code: 'ku_ckb', name: 'Kurdish (Sorani)', region: 'Middle East', flag: '🇮🇶' },
-  'tr-ku': { code: 'ku_kmr_latin', name: 'Kurdish (Kurmanji)', region: 'Middle East', flag: '🇹🇷' },
-  'tr': { code: 'tr', name: 'Turkey', region: 'Middle East', flag: '🇹🇷' },
-  'pk': { code: 'ur', name: 'Pakistan (Urdu)', region: 'Middle East', flag: '🇵🇰' },
-  'uz': { code: 'uz_UZ_latin', name: 'Uzbekistan', region: 'Middle East', flag: '🇺🇿' },
-
-  // Africa
-  'za-af': { code: 'af_ZA', name: 'South Africa (Afrikaans)', region: 'Africa', flag: '🇿🇦' },
-  'za-en': { code: 'en_ZA', name: 'South Africa (English)', region: 'Africa', flag: '🇿🇦' },
-  'za-zu': { code: 'zu_ZA', name: 'South Africa (Zulu)', region: 'Africa', flag: '🇿🇦' },
-  'gh': { code: 'en_GH', name: 'Ghana', region: 'Africa', flag: '🇬🇭' },
-  'ng-en': { code: 'en_NG', name: 'Nigeria (English)', region: 'Africa', flag: '🇳🇬' },
-  'ng-yo': { code: 'yo_NG', name: 'Nigeria (Yoruba)', region: 'Africa', flag: '🇳🇬' },
-  'sn': { code: 'fr_SN', name: 'Senegal', region: 'Africa', flag: '🇸🇳' },
-
-  // Oceania
-  'au': { code: 'en_AU', name: 'Australia', region: 'Oceania', flag: '🇦🇺' },
-
-  // Global Contexts
-  'en': { code: 'en', name: 'Global (English)', region: 'Global', flag: '🌍' },
-  'eo': { code: 'eo', name: 'Esperanto', region: 'Global', flag: '🌍' },
+  'in': { code: 'en_IND', name: 'India', region: 'Asia', flag: '🇮🇳' },
+  'bd': { code: 'bn_BD', name: 'Bangladesh', region: 'Asia', flag: '🇧🇩' },
+  'za': { code: 'af_ZA', name: 'South Africa', region: 'Africa', flag: '🇿🇦' },
+  'ng': { code: 'en_NG', name: 'Nigeria', region: 'Africa', flag: '🇳🇬' },
+  'ae': { code: 'ar', name: 'United Arab Emirates', region: 'Middle East', flag: '🇦🇪' },
+  'sa': { code: 'ar', name: 'Saudi Arabia', region: 'Middle East', flag: '🇸🇦' },
+  'tr': { code: 'tr', name: 'Turkey', region: 'Middle East', flag: '🇹🇷' }
 };
 
 type Identity = {
-  fullName: string; phone: string; idNumber: string; street: string;
-  city: string; state: string; zip: string;
+  fullName: string; 
+  email: string;
+  phone: string; 
+  idNumber: string; 
+  dateOfBirth: string;
+  jobTitle: string;
+  company: string;
+  street: string;
+  city: string; 
+  state: string; 
+  zip: string;
+  country: string;
+  avatar: string;
 };
 
 const FAQ_DATA = [
@@ -120,35 +73,43 @@ export default function FakeAddress() {
 
   const activeLocaleData = locale ? SUPPORTED_LOCALES[locale] : null;
 
-  const generateIdentity = async () => {
+  const generateIdentity = () => {
     if (!activeLocaleData) return;
     setIsGenerating(true);
     
-    try {
-      const { allFakers } = await import('@faker-js/faker');
-      const faker = allFakers[activeLocaleData.code as keyof typeof allFakers] || allFakers['en_US'];
+    // Simulate a brief delay for UI/UX feedback before synchronous generation
+    setTimeout(() => {
+      try {
+        const faker = allFakers[activeLocaleData.code as keyof typeof allFakers] || allFakers['en_US'];
 
-      const safeCall = (fn: () => string, fallback: string = 'N/A') => {
-        try { const res = fn(); return res === null || res === undefined || res.trim() === '' ? fallback : res; } 
-        catch { return fallback; }
-      };
+        const safeCall = (fn: () => string, fallback: string = 'N/A') => {
+          try { const res = fn(); return res === null || res === undefined || res.trim() === '' ? fallback : res; } 
+          catch { return fallback; }
+        };
 
-      setIdentity({
-        fullName: safeCall(() => faker.person.fullName()),
-        phone: safeCall(() => faker.phone.number()),
-        idNumber: safeCall(() => faker.string.alphanumeric({ length: 10, casing: 'upper' })),
-        street: safeCall(() => faker.location.streetAddress()),
-        city: safeCall(() => faker.location.city()),
-        state: safeCall(() => faker.location.state()),
-        zip: safeCall(() => faker.location.zipCode()),
-      });
-    } finally {
-      setIsGenerating(false);
-    }
+        setIdentity({
+          fullName: safeCall(() => faker.person.fullName()),
+          email: safeCall(() => faker.internet.email()),
+          phone: safeCall(() => faker.phone.number()),
+          idNumber: safeCall(() => faker.string.alphanumeric({ length: 10, casing: 'upper' })),
+          dateOfBirth: safeCall(() => faker.date.birthdate({ min: 18, max: 65, mode: 'age' }).toLocaleDateString()),
+          jobTitle: safeCall(() => faker.person.jobTitle()),
+          company: safeCall(() => faker.company.name()),
+          street: safeCall(() => faker.location.streetAddress()),
+          city: safeCall(() => faker.location.city()),
+          state: safeCall(() => faker.location.state()),
+          zip: safeCall(() => faker.location.zipCode()),
+          country: safeCall(() => faker.location.country()),
+          avatar: safeCall(() => faker.image.avatar()),
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    }, 250);
   };
 
   const formattedOutput = identity ? 
-    `${identity.fullName}\n${identity.street}\n${identity.city}, ${identity.state !== 'N/A' ? identity.state + ' ' : ''}${identity.zip}\nPhone: ${identity.phone}\nID Vector: ${identity.idNumber}` : '';
+    `[Personal Information]\nName: ${identity.fullName}\nEmail: ${identity.email}\nPhone: ${identity.phone}\nDOB: ${identity.dateOfBirth}\nID Vector: ${identity.idNumber}\n\n[Employment]\nJob Title: ${identity.jobTitle}\nCompany: ${identity.company}\n\n[Location]\nStreet: ${identity.street}\nCity: ${identity.city}\nState/Province: ${identity.state}\nPostal Code: ${identity.zip}\nCountry: ${identity.country}` : '';
 
   if (!locale) {
     const groupedLocales = Object.entries(SUPPORTED_LOCALES).reduce((acc, [slug, data]) => {
@@ -229,16 +190,44 @@ export default function FakeAddress() {
         
         {identity ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 md:p-8 border border-zinc-100 dark:border-zinc-800 shadow-inner">
-            <div className="space-y-5">
-              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><UserSquare2 className="size-3.5" /> Full Name</label><div className="text-xl font-bold text-zinc-900 dark:text-white">{identity.fullName}</div></div>
-              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Phone className="size-3.5" /> Phone Number</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.phone}</div></div>
-              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Hash className="size-3.5" /> Identity Vector ID</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.idNumber}</div></div>
+            
+            {/* Column 1: Personal & Employment */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 mb-2">
+                <img src={identity.avatar} alt="Avatar" className="size-16 rounded-full bg-zinc-200 dark:bg-zinc-800 object-cover shadow-sm" />
+                <div>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1"><UserSquare2 className="size-3.5" /> Full Name</label>
+                  <div className="text-xl font-bold text-zinc-900 dark:text-white leading-none">{identity.fullName}</div>
+                </div>
+              </div>
+
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Mail className="size-3.5" /> Email Address</label><div className="text-base font-medium text-zinc-900 dark:text-white truncate">{identity.email}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Phone className="size-3.5" /> Phone Number</label><div className="text-base font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.phone}</div></div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Calendar className="size-3.5" /> Date of Birth</label><div className="text-base font-medium text-zinc-900 dark:text-white">{identity.dateOfBirth}</div></div>
+                <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Hash className="size-3.5" /> Vector ID</label><div className="text-base font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.idNumber}</div></div>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                <div className="mb-4"><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Briefcase className="size-3.5" /> Job Title</label><div className="text-base font-medium text-zinc-900 dark:text-white">{identity.jobTitle}</div></div>
+                <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Building2 className="size-3.5" /> Company</label><div className="text-base font-medium text-zinc-900 dark:text-white">{identity.company}</div></div>
+              </div>
             </div>
-            <div className="space-y-5 md:border-l border-zinc-200 dark:border-zinc-800 md:pl-8">
+
+            {/* Column 2: Location Information */}
+            <div className="space-y-6 md:border-l border-zinc-200 dark:border-zinc-800 md:pl-8 flex flex-col justify-center">
               <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><MapPin className="size-3.5" /> Street Address</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.street}</div></div>
-              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">City & Region</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.city}{identity.state !== 'N/A' ? `, ${identity.state}` : ''}</div></div>
-              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Postal Code</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.zip}</div></div>
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">City</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.city}</div></div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">State/Province</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.state}</div></div>
+                <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Postal Code</label><div className="text-lg font-medium text-zinc-900 dark:text-white font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-3 py-1 rounded-lg">{identity.zip}</div></div>
+              </div>
+
+              <div><label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5"><Globe className="size-3.5" /> Country</label><div className="text-lg font-medium text-zinc-900 dark:text-white">{identity.country}</div></div>
             </div>
+
           </div>
         ) : (
           <div className="h-64 flex flex-col items-center justify-center bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl border border-zinc-200 dark:border-zinc-800 border-dashed mb-8 transition-colors">
