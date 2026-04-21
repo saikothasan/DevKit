@@ -35,8 +35,8 @@ export default function Messages() {
 
   useEffect(() => {
     if (!user) return;
-    fetch('/api/chat/conversations').then(r => r.json()).then(setConversations);
-    fetch('/api/chat/directory').then(r => r.json()).then(setDirectory);
+    fetch('/api/chat/conversations').then(r => r.json()).then(data => setConversations(data as Conversation[]));
+    fetch('/api/chat/directory').then(r => r.json()).then(data => setDirectory(data as Peer[]));
   }, [user]);
 
   useEffect(() => {
@@ -48,8 +48,8 @@ export default function Messages() {
     
     fetch(`/api/chat/messages/${activeConvo.id}`)
       .then(r => r.json())
-      .then(data => { 
-        if(!data.error) setMessages(data); 
+      .then((data: any) => { 
+        if(!data.error) setMessages(data as ChatMessage[]); 
         scrollToBottom(); 
       });
 
@@ -102,7 +102,7 @@ export default function Messages() {
       
       try {
         const res = await fetch('/api/upload/chat', { method: 'POST', body: formData });
-        const data = await res.json();
+        const data = await res.json() as any;
         
         if (data.success) {
           fileUrl = data.fileUrl;
@@ -167,7 +167,7 @@ export default function Messages() {
                 {filteredDirectory.map(peer => (
                   <button key={peer.id} onClick={async () => {
                       const res = await fetch('/api/chat/conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUserId: peer.id }) });
-                      if(res.ok) { const convo = await res.json(); setActiveConvo(convo); setSearchQuery(''); }
+                      if(res.ok) { const convo = await res.json() as any; setActiveConvo(convo); setSearchQuery(''); }
                     }} className="w-full flex items-center gap-3 p-3 text-left rounded-xl hover:bg-white dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition-colors">
                     <div className="size-8 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
                       {peer.avatarUrl ? <img src={peer.avatarUrl} alt="" className="w-full h-full object-cover"/> : <User className="size-4 text-zinc-500" />}
