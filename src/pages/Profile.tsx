@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, Calendar, MessageSquarePlus, MessageCircle, Flame, Camera, Loader2, AlertCircle } from 'lucide-react';
-import { SeoHead } from '@/components/SeoHead';
-import { useAuth } from '@/context/AuthContext';
+import { SeoHead } from '../components/SeoHead';
+import { useAuth } from '../context/AuthContext';
 
 type ProfileData = {
   user: { id: number; username: string; points: number; avatarUrl: string | null; createdAt: string; };
