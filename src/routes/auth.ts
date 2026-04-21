@@ -49,10 +49,44 @@ const validateTurnstile = async (token: string, secret: string, ip: string) => {
   };
 };
 
+// ==========================================
+// RESEND TRANSACTIONAL EMAIL
+// ==========================================
+const sendVerificationEmail = async (email: string, token: string, apiKey: string, origin: string) => {
+  const verifyUrl = `${origin}/verify-email?token=${token}`;
+  
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'Security <noreply@devkit.local>', // Replace with verified sending domain in production
+      to: [email],
+      subject: 'Complete your DevKit Registration',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Verify your email address</h2>
+          <p>Thank you for registering. Please confirm your email address by clicking the link below:</p>
+          <a href="${verifyUrl}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Verify Email</a>
+          <p style="margin-top: 20px; font-size: 12px; color: #666;">If you did not request this, please ignore this email.</p>
+        </div>
+      `
+    })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('[Resend API Error]', errorText);
+    throw new Error('Failed to dispatch verification email.');
+  }
+};
+
 const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters").max(30),
+  username: z.string().min(3, "Username must be at least 3 characters").max(30).regex(/^[a-zA-Z0-9_]+$/, "Only alphanumeric and underscores allowed"),
   email: z.string().email("Invalid email format"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters").regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain uppercase, lowercase, and a number"),
   turnstileToken: z.string().min(1, "Security verification required")
 });
 
@@ -71,19 +105,15 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
   const { username, email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '127.0.0.1';
-  // Fallback to Cloudflare's generic testing secret if none provided
   const secretKey = c.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
-  // 1. Validate Token with Cloudflare
   const validation = await validateTurnstile(turnstileToken, secretKey, ip);
   if (!validation.success) {
     return c.json({ error: 'Security verification failed or expired. Please refresh and try again.' }, 400);
   }
 
-  // 2. Ephemeral ID Fraud Detection (Velocity Check)
   const ephemeralId = validation.metadata?.ephemeral_id || validation.ephemeral_id;
   if (ephemeralId) {
-    // Block if more than 3 accounts created from this device fingerprint in the last hour
     const recentSignups = await db.select({ value: count() })
       .from(turnstileEvents)
       .where(
@@ -95,16 +125,16 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
       ).get();
 
     if (recentSignups && recentSignups.value >= 3) {
-      return c.json({ error: 'Suspicious activity detected. Please try again later.' }, 403);
+      return c.json({ error: 'Suspicious activity detected from this device. Please try again later.' }, 429);
     }
   }
 
   try {
     const existingEmail = await db.select().from(users).where(eq(users.email, email)).get();
-    if (existingEmail) return c.json({ error: 'Email already registered' }, 400);
+    if (existingEmail) return c.json({ error: 'Email already registered' }, 409);
     
     const existingUsername = await db.select().from(users).where(eq(users.username, username)).get();
-    if (existingUsername) return c.json({ error: 'Username already taken' }, 400);
+    if (existingUsername) return c.json({ error: 'Username already taken' }, 409);
 
     const passwordHash = await hashPassword(password);
     const verificationToken = crypto.randomUUID();
@@ -112,7 +142,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
     const totalUsers = await db.select({ value: count() }).from(users).get();
     const isFirstUser = totalUsers?.value === 0;
     const assignedRole = isFirstUser ? 'admin' : 'user';
-    const isVerified = isFirstUser; // Auto-verify the first user
+    const isVerified = isFirstUser; 
 
     const newUser = await db.insert(users).values({ 
       username, 
@@ -123,7 +153,6 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
       verificationToken: isVerified ? null : verificationToken
     }).returning();
     
-    // 3. Log the successful signup event
     if (ephemeralId) {
       c.executionCtx.waitUntil(
         db.insert(turnstileEvents).values({
@@ -136,17 +165,24 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
     }
 
     if (!isVerified) {
-      // Setup Resend integration here for production
-      console.log(`[Email Mock] Sent verification to ${email}: /verify-email?token=${verificationToken}`);
+      if (c.env.RESEND_API_KEY) {
+        const origin = new URL(c.req.url).origin;
+        c.executionCtx.waitUntil(
+          sendVerificationEmail(email, verificationToken, c.env.RESEND_API_KEY, origin)
+        );
+      } else {
+        console.warn(`[Dev Warning] RESEND_API_KEY missing. Verification link: /verify-email?token=${verificationToken}`);
+      }
       return c.json({ requiresVerification: true, message: "Please check your email to verify your account." }, 201);
     }
 
     const payload = { id: newUser[0].id, username: newUser[0].username, role: newUser[0].role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
     const token = await sign(payload, getSecret(c), 'HS256');
     
-    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: 604800 });
     return c.json({ id: newUser[0].id, username: newUser[0].username, role: newUser[0].role, points: newUser[0].points, isVerified: true }, 201);
   } catch (err: any) {
+    console.error('[Registration Error]', err);
     return c.json({ error: 'Registration failed due to a system constraint.' }, 500);
   }
 });
@@ -156,9 +192,8 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   const { email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '127.0.0.1';
-  const secretKey = c.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
+  const secretKey = c.env.TURNSTILE_SECRET_KEY || '0x4AAAAAACZdr21BNxIZulZPOsw_M_1KLXo';
 
-  // 1. Validate Token with Cloudflare
   const validation = await validateTurnstile(turnstileToken, secretKey, ip);
   if (!validation.success) {
     return c.json({ error: 'Security verification failed.' }, 400);
@@ -170,7 +205,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   if (!user) return c.json({ error: 'Invalid credentials' }, 401);
   
   if (!user.passwordHash) {
-    return c.json({ error: 'Please login using GitHub (Social Login).' }, 401);
+    return c.json({ error: 'Account linked via OAuth. Please login using GitHub.' }, 401);
   }
 
   if (!(await verifyPassword(password, user.passwordHash))) {
@@ -181,7 +216,6 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
     return c.json({ error: 'Please verify your email address before logging in.' }, 403);
   }
 
-  // 2. Log Ephemeral ID for the successful Login event
   if (ephemeralId) {
     c.executionCtx.waitUntil(
       db.insert(turnstileEvents).values({
@@ -196,7 +230,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
   const token = await sign(payload, getSecret(c), 'HS256');
   
-  setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+  setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: 604800 });
   return c.json({ id: user.id, username: user.username, role: user.role, points: user.points });
 });
 
@@ -214,7 +248,7 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
   const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
   const jwt = await sign(payload, getSecret(c), 'HS256');
   
-  setCookie(c, 'auth_token', jwt, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+  setCookie(c, 'auth_token', jwt, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: 604800 });
   return c.json({ success: true });
 });
 
@@ -227,7 +261,7 @@ authRouter.get('/github', async (c) => {
   if (!clientId) return c.json({ error: 'GitHub OAuth not configured' }, 500);
 
   const redirectUri = `${new URL(c.req.url).origin}/api/auth/github/callback`;
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=read:user user:email`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user user:email`;
   
   return c.redirect(url);
 });
@@ -261,7 +295,7 @@ authRouter.get('/github/callback', async (c) => {
     const userRes = await fetch('https://api.github.com/user', {
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
-        'User-Agent': 'DevKit-Pro-App'
+        'User-Agent': 'DevKit-Worker-Edge'
       }
     });
     
@@ -272,7 +306,7 @@ authRouter.get('/github/callback', async (c) => {
       const emailRes = await fetch('https://api.github.com/user/emails', {
         headers: {
           'Authorization': `Bearer ${tokenData.access_token}`,
-          'User-Agent': 'DevKit-Pro-App'
+          'User-Agent': 'DevKit-Worker-Edge'
         }
       });
       const emails = await emailRes.json() as any[];
@@ -280,7 +314,7 @@ authRouter.get('/github/callback', async (c) => {
       if (primaryEmail) email = primaryEmail.email;
     }
 
-    if (!email) throw new Error('No email found associated with this GitHub account');
+    if (!email) throw new Error('No public email associated with this GitHub account');
 
     const db = drizzle(c.env.DB);
     let user = await db.select().from(users).where(eq(users.githubId, githubUser.id.toString())).get();
@@ -312,11 +346,11 @@ authRouter.get('/github/callback', async (c) => {
     const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
     const token = await sign(payload, getSecret(c), 'HS256');
     
-    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: 604800 });
     
     return c.redirect('/');
   } catch (err: any) {
-    console.error('GitHub OAuth Error:', err);
+    console.error('[GitHub OAuth Error]', err);
     return c.redirect(`/login?error=${encodeURIComponent(err.message || 'Authentication failed')}`);
   }
 });
@@ -326,7 +360,7 @@ authRouter.get('/github/callback', async (c) => {
 // ==========================================
 
 authRouter.post('/logout', async (c) => {
-  deleteCookie(c, 'auth_token', { path: '/' });
+  deleteCookie(c, 'auth_token', { path: '/', secure: true, sameSite: 'Strict' });
   return c.json({ success: true });
 });
 
@@ -340,13 +374,13 @@ authRouter.get('/me', async (c) => {
     const user = await db.select().from(users).where(eq(users.id, payload.id as number)).get();
     
     if (!user) {
-      deleteCookie(c, 'auth_token', { path: '/' });
+      deleteCookie(c, 'auth_token', { path: '/', secure: true, sameSite: 'Strict' });
       return c.json({ user: null }, 401);
     }
 
     return c.json({ user: { id: user.id, username: user.username, role: user.role, points: user.points, avatarUrl: user.avatarUrl } });
   } catch (err) {
-    deleteCookie(c, 'auth_token', { path: '/' });
+    deleteCookie(c, 'auth_token', { path: '/', secure: true, sameSite: 'Strict' });
     return c.json({ user: null }, 401);
   }
 });
