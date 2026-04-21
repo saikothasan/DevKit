@@ -25,6 +25,24 @@ export const authRouter = new Hono<AuthEnv>();
 const getSecret = (c: any): string => c.env.JWT_SECRET || 'super-secure-dev-secret-123';
 
 // ==========================================
+// EXPORTED AUTH MIDDLEWARE
+// ==========================================
+export const requireAuth = async (c: any, next: any) => {
+  const token = getCookie(c, 'auth_token');
+  if (!token) {
+    return c.json({ error: 'Unauthorized: Authentication required.' }, 401);
+  }
+
+  try {
+    const payload = await verify(token, getSecret(c), 'HS256');
+    c.set('user', payload);
+    await next();
+  } catch (err) {
+    return c.json({ error: 'Unauthorized: Invalid or expired token.' }, 401);
+  }
+};
+
+// ==========================================
 // CLOUDFLARE TURNSTILE VALIDATION
 // ==========================================
 const validateTurnstile = async (token: string, secret: string, ip: string) => {
@@ -62,9 +80,9 @@ const sendVerificationEmail = async (email: string, token: string, apiKey: strin
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'Visatk <no-reply@ser.visatk.us>',
+      from: 'Security <noreply@devkit.local>', // Replace with verified sending domain in production
       to: [email],
-      subject: 'Complete your Visatk Registration',
+      subject: 'Complete your DevKit Registration',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Verify your email address</h2>
