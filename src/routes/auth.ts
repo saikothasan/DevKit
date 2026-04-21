@@ -62,9 +62,9 @@ const sendVerificationEmail = async (email: string, token: string, apiKey: strin
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'Security <noreply@devkit.local>', // Replace with verified sending domain in production
+      from: 'Visatk <no-reply@ser.visatk.us>',
       to: [email],
-      subject: 'Complete your DevKit Registration',
+      subject: 'Complete your Visatk Registration',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Verify your email address</h2>
@@ -105,7 +105,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
   const { username, email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '127.0.0.1';
-  const secretKey = c.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
+  const secretKey = c.env.TURNSTILE_SECRET_KEY || '0x4AAAAAACZdr21BNxIZulZPOsw_M_1KLXo';
 
   const validation = await validateTurnstile(turnstileToken, secretKey, ip);
   if (!validation.success) {
