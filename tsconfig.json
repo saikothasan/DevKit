@@ -1,1 +1,56 @@
-
+{
+  "compilerOptions": {
+    /* Base Options: Targeting modern V8 environments used by Cloudflare Workers */
+    "target": "ESNext",
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    
+    /* Bundler & Resolution: Essential for Vite and @cloudflare/vite-plugin */
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    
+    /* Strict Type-Checking */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    
+    /* Interoperability & Output Constraints */
+    "allowJs": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    
+    /* JSX & Framework Specific */
+    "jsx": "react-jsx",
+    
+    /* Path Aliasing: Aligned with the Vite configuration */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    
+    /* Environment Typings */
+    "types": [
+      "@cloudflare/workers-types",
+      "vite/client",
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*.ts", 
+    "src/**/*.tsx", 
+    "src/**/*.d.ts", 
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules", 
+    "dist", 
+    ".wrangler",
+    "migrations"
+  ]
+}
