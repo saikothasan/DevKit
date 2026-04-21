@@ -6,6 +6,10 @@
     ],
     "jsx": "react-jsx",
     "module": "es2022",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowJs": true,
