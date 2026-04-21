@@ -15,7 +15,7 @@ export type AuthEnv = {
     RESEND_API_KEY?: string;
     GITHUB_CLIENT_ID?: string;
     GITHUB_CLIENT_SECRET?: string;
-    TURNSTILE_SECRET_KEY?: string; // Add your Turnstile Secret Key to wrangler.toml / CF Dashboard
+    TURNSTILE_SECRET_KEY?: string;
   };
   Variables: { user: { id: number; username: string; role: string; exp: number; }; };
 };
@@ -62,12 +62,16 @@ const loginSchema = z.object({
   turnstileToken: z.string().min(1, "Security verification required")
 });
 
+// ==========================================
+// EMAIL / PASSWORD AUTHENTICATION
+// ==========================================
+
 authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
   const db = drizzle(c.env.DB);
   const { username, email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '127.0.0.1';
-  // Use dummy secret if not provided in env for local dev
+  // Fallback to Cloudflare's generic testing secret if none provided
   const secretKey = c.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
   // 1. Validate Token with Cloudflare
@@ -86,7 +90,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
         and(
           eq(turnstileEvents.ephemeralId, ephemeralId),
           eq(turnstileEvents.eventType, 'signup'),
-          sql`${turnstileEvents.createdAt} > (strftime('%s', 'now') - 3600)` // Last hour
+          sql`${turnstileEvents.createdAt} > (strftime('%s', 'now') - 3600)`
         )
       ).get();
 
@@ -108,9 +112,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
     const totalUsers = await db.select({ value: count() }).from(users).get();
     const isFirstUser = totalUsers?.value === 0;
     const assignedRole = isFirstUser ? 'admin' : 'user';
-    
-    // Automatically verify the first user (admin), otherwise require email verification
-    const isVerified = isFirstUser;
+    const isVerified = isFirstUser; // Auto-verify the first user
 
     const newUser = await db.insert(users).values({ 
       username, 
@@ -134,7 +136,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
     }
 
     if (!isVerified) {
-      // Mock Resend trigger here
+      // Setup Resend integration here for production
       console.log(`[Email Mock] Sent verification to ${email}: /verify-email?token=${verificationToken}`);
       return c.json({ requiresVerification: true, message: "Please check your email to verify your account." }, 201);
     }
@@ -154,7 +156,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   const { email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '127.0.0.1';
-  const secretKey = c.env.TURNSTILE_SECRET_KEY || '0x4AAAAAACZdr21BNxIZulZPOsw_M_1KLXo';
+  const secretKey = c.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
   // 1. Validate Token with Cloudflare
   const validation = await validateTurnstile(turnstileToken, secretKey, ip);
@@ -197,6 +199,131 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
   return c.json({ id: user.id, username: user.username, role: user.role, points: user.points });
 });
+
+authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string() })), async (c) => {
+  const db = drizzle(c.env.DB);
+  const { token } = c.req.valid('json');
+
+  const user = await db.select().from(users).where(eq(users.verificationToken, token)).get();
+  if (!user) return c.json({ error: 'Invalid or expired verification token' }, 400);
+
+  await db.update(users)
+    .set({ isVerified: true, verificationToken: null })
+    .where(eq(users.id, user.id));
+
+  const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
+  const jwt = await sign(payload, getSecret(c), 'HS256');
+  
+  setCookie(c, 'auth_token', jwt, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+  return c.json({ success: true });
+});
+
+// ==========================================
+// GITHUB OAUTH
+// ==========================================
+
+authRouter.get('/github', async (c) => {
+  const clientId = c.env.GITHUB_CLIENT_ID;
+  if (!clientId) return c.json({ error: 'GitHub OAuth not configured' }, 500);
+
+  const redirectUri = `${new URL(c.req.url).origin}/api/auth/github/callback`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=read:user user:email`;
+  
+  return c.redirect(url);
+});
+
+authRouter.get('/github/callback', async (c) => {
+  const code = c.req.query('code');
+  if (!code) return c.redirect('/login?error=Authorization+failed');
+
+  const clientId = c.env.GITHUB_CLIENT_ID;
+  const clientSecret = c.env.GITHUB_CLIENT_SECRET;
+  
+  if (!clientId || !clientSecret) return c.redirect('/login?error=OAuth+not+configured');
+
+  try {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+      }),
+    });
+
+    const tokenData = await tokenRes.json() as any;
+    if (tokenData.error) throw new Error(tokenData.error_description);
+
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+        'User-Agent': 'DevKit-Pro-App'
+      }
+    });
+    
+    const githubUser = await userRes.json() as any;
+
+    let email = githubUser.email;
+    if (!email) {
+      const emailRes = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'User-Agent': 'DevKit-Pro-App'
+        }
+      });
+      const emails = await emailRes.json() as any[];
+      const primaryEmail = emails.find(e => e.primary) || emails[0];
+      if (primaryEmail) email = primaryEmail.email;
+    }
+
+    if (!email) throw new Error('No email found associated with this GitHub account');
+
+    const db = drizzle(c.env.DB);
+    let user = await db.select().from(users).where(eq(users.githubId, githubUser.id.toString())).get();
+
+    if (!user) {
+      user = await db.select().from(users).where(eq(users.email, email)).get();
+      if (user) {
+        await db.update(users).set({ githubId: githubUser.id.toString(), isVerified: true }).where(eq(users.id, user.id));
+      } else {
+        const totalUsers = await db.select({ value: count() }).from(users).get();
+        const isFirstUser = totalUsers?.value === 0;
+        
+        let username = githubUser.login;
+        const existingUsername = await db.select().from(users).where(eq(users.username, username)).get();
+        if (existingUsername) username = `${username}_${Math.floor(Math.random() * 1000)}`;
+
+        const newUser = await db.insert(users).values({
+          username,
+          email,
+          githubId: githubUser.id.toString(),
+          avatarUrl: githubUser.avatar_url,
+          role: isFirstUser ? 'admin' : 'user',
+          isVerified: true 
+        }).returning();
+        user = newUser[0];
+      }
+    }
+
+    const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 };
+    const token = await sign(payload, getSecret(c), 'HS256');
+    
+    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+    
+    return c.redirect('/');
+  } catch (err: any) {
+    console.error('GitHub OAuth Error:', err);
+    return c.redirect(`/login?error=${encodeURIComponent(err.message || 'Authentication failed')}`);
+  }
+});
+
+// ==========================================
+// SESSION MANAGEMENT
+// ==========================================
 
 authRouter.post('/logout', async (c) => {
   deleteCookie(c, 'auth_token', { path: '/' });
