@@ -56,7 +56,7 @@ export default function Profile() {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       
       if (data.success && profile) {
         setProfile({ ...profile, user: { ...profile.user, avatarUrl: data.avatarUrl } });
