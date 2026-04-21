@@ -39,8 +39,8 @@
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "CardChecker",
-        "name": "CardChecker"
+        "class_name": "LiveSession",
+        "name": "LiveSession"
       }
     ]
   },
@@ -48,7 +48,7 @@
     {
       "tag": "v1",
       "new_sqlite_classes": [
-        "CardChecker"
+        "LiveSession"
       ]
     }
   ]
