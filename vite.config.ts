@@ -1,22 +1,21 @@
-import { cloudflare } from "@cloudflare/vite-plugin";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { cloudflare } from "@cloudflare/vite-plugin";
+import path from "path";
 
 export default defineConfig({
-  plugins: [react(), cloudflare(), tailwindcss()],
+  plugins: [
+    tailwindcss(), 
+    react(), 
+    cloudflare()
+  ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   server: {
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8787',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+    port: 5173,
   },
 });
