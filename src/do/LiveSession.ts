@@ -16,6 +16,8 @@ export class LiveSession extends DurableObject {
 
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
+    
+    // Enable WebSocket Hibernation
     this.ctx.acceptWebSocket(server);
 
     return new Response(null, {
@@ -49,6 +51,7 @@ export class LiveSession extends DurableObject {
           message: inserted[0]
         });
 
+        // Broadcast to all active hibernation connections
         const sockets = this.ctx.getWebSockets();
         for (const socket of sockets) {
           if (socket !== ws) { 
@@ -57,12 +60,16 @@ export class LiveSession extends DurableObject {
         }
       }
     } catch (err) {
-      console.error('WebSocket msg execution failed:', err);
+      console.error('WebSocket execution failed:', err);
     }
   }
 
-  // PREFIXED unused variable with `_` to satisfy strict typing rules
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean) {
     ws.close(code, reason);
+  }
+
+  async webSocketError(ws: WebSocket, error: unknown) {
+    console.error('WebSocket encountered an error:', error);
+    ws.close(1011, 'Internal Error');
   }
 }
