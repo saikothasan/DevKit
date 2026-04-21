@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Send, MessageSquare, User, Clock, Loader2, Link as LinkIcon, Paperclip, X, File as FileIcon, Download, AlertTriangle } from 'lucide-react';
-import { SeoHead } from '@/components/SeoHead';
-import { useAuth } from '@/context/AuthContext';
+import { SeoHead } from '../components/SeoHead';
+import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 type Peer = { id: number; username: string; avatarUrl?: string | null; };
