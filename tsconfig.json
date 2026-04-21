@@ -1,5 +1,4 @@
 {
-  "extends": "agents/tsconfig",
   "compilerOptions": {
     "target": "es2024",
     "lib": [
