@@ -4,7 +4,7 @@
   "main": "./src/index.ts",
   "workers_dev": false,
   "account_id": "7416e7b5d307baabca87e8fba69158e5",
-  "compatibility_date": "2026-04-14",
+  "compatibility_date": "2026-04-21",
   "compatibility_flags": [
     "nodejs_compat"
   ],
@@ -16,13 +16,12 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": [
       "/api/*",
-      "/agents/*",
+      "/webhook/*",
       "/oauth/*"
     ]
   },
   "ai": {
-    "binding": "AI",
-    "remote": true
+    "binding": "AI"
   },
   "observability": {
     "enabled": true
@@ -40,8 +39,8 @@
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "ChatAgent",
-        "name": "ChatAgent"
+        "class_name": "CardChecker",
+        "name": "CardChecker"
       }
     ]
   },
@@ -49,7 +48,7 @@
     {
       "tag": "v1",
       "new_sqlite_classes": [
-        "ChatAgent"
+        "CardChecker"
       ]
     }
   ]
