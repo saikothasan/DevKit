@@ -1,19 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Calendar, MessageSquarePlus, MessageCircle, Flame } from 'lucide-react';
+import { User, Calendar, MessageSquarePlus, MessageCircle, Flame, Camera, Loader2 } from 'lucide-react';
 import { SeoHead } from '../components/SeoHead';
+import { useAuth } from '../context/AuthContext';
 
 type ProfileData = {
-  user: { id: number; username: string; points: number; createdAt: string; };
+  user: { id: number; username: string; points: number; avatarUrl: string | null; createdAt: string; };
   stats: { threads: number; replies: number; };
   recentThreads: { id: number; title: string; category: string; upvotes: number; createdAt: string; }[];
 };
 
 export default function Profile() {
   const { username } = useParams();
+  const { user: currentUser, refreshUser } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isOwnProfile = currentUser?.username === username;
 
   useEffect(() => {
     if (!username) return;
@@ -28,6 +34,38 @@ export default function Profile() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [username]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("File exceeds the 2MB size limit.");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/upload/avatar', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && profile) {
+        setProfile({ ...profile, user: { ...profile.user, avatarUrl: data.avatarUrl } });
+        await refreshUser();
+      } else {
+        alert(data.error || "Upload execution failed.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,8 +93,31 @@ export default function Profile() {
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm mb-8 flex flex-col items-center text-center relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-orange-500 to-amber-400"></div>
         
-        <div className="size-24 rounded-full bg-orange-500/10 flex items-center justify-center mb-6 border-4 border-white dark:border-zinc-900 shadow-xl">
-          <User className="size-10 text-orange-500" />
+        <div className="relative group mb-6">
+          <div className="size-24 rounded-full bg-orange-500/10 flex items-center justify-center border-4 border-white dark:border-zinc-900 shadow-xl overflow-hidden">
+            {profile.user.avatarUrl ? (
+              <img src={profile.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User className="size-10 text-orange-500" />
+            )}
+          </div>
+          
+          {isOwnProfile && (
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="absolute inset-0 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer disabled:cursor-not-allowed"
+            >
+              {isUploading ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}
+            </button>
+          )}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleAvatarUpload} 
+            accept="image/*" 
+            className="hidden" 
+          />
         </div>
         
         <h1 className="text-3xl font-bold mb-2 text-zinc-900 dark:text-white">{profile.user.username}</h1>
