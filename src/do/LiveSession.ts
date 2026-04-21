@@ -61,7 +61,8 @@ export class LiveSession extends DurableObject {
     }
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+  // PREFIXED unused variable with `_` to satisfy strict typing rules
+  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean) {
     ws.close(code, reason);
   }
 }
