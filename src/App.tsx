@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import Profile from './pages/Profile';
+import Messages from './pages/Messages';
 
 // Tools
 import TestCards from './pages/TestCards';
@@ -33,6 +34,9 @@ export default function App() {
             <Route path="fake-address/:locale" element={<FakeAddress />} />
             <Route path="card-checker" element={<CardChecker />} />
             <Route path="bin-checker" element={<BinChecker />} />
+            
+            {/* Real-time WebSockets Routing */}
+            <Route path="messages" element={<Messages />} />
             
             {/* Authentication & User Management Routes */}
             <Route path="login" element={<Login />} />
