@@ -67,3 +67,12 @@ export const messages = sqliteTable('messages', {
   isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
+
+export const turnstileEvents = sqliteTable('turnstile_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ephemeralId: text('ephemeral_id').notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(), // 'signup' or 'login'
+  ipAddress: text('ip_address'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
