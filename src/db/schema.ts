@@ -48,6 +48,8 @@ export const threadUnlocks = sqliteTable('thread_unlocks', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
 
+// --- NEW REAL-TIME CHAT ENTITIES ---
+
 export const conversations = sqliteTable('conversations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   user1Id: integer('user1_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
