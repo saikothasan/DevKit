@@ -36,6 +36,12 @@
       "database_id": "ac8aa89b-786a-47df-8b7a-d5f9eca96b33"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "agentr2"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
