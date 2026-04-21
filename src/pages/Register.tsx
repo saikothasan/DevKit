@@ -1,4 +1,4 @@
-import React, { useState, useRef, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile'; 
 
@@ -9,7 +9,8 @@ export default function Register() {
   const [turnstileToken, setTurnstileToken] = useState<string>('');
   const formRef = useRef<HTMLFormElement>(null);
 
-  const siteKey = import.meta.env.VITE_TURNSTILE_SITEKEY || '0x4AAAAAACZdr2afC17LFhhN';
+  // Cloudflare Official Testing Keys for local development
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITEKEY || '1x00000000000000000000AA';
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,7 +34,12 @@ export default function Register() {
         body: JSON.stringify({ username, email, password, turnstileToken }),
       });
 
-      const data = await response.json();
+      // Strict type assertion for the unknown JSON response
+      const data = (await response.json()) as { 
+        error?: string; 
+        requiresVerification?: boolean; 
+        message?: string; 
+      };
 
       if (!response.ok) {
         throw new Error(data.error || 'Registration failed due to a system constraint.');
@@ -42,7 +48,6 @@ export default function Register() {
       if (data.requiresVerification) {
         navigate('/verify-email', { state: { message: data.message } });
       } else {
-        // Full refresh to ensure global auth state catches the new secure cookie
         window.location.href = '/'; 
       }
     } catch (err: any) {
