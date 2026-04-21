@@ -47,3 +47,20 @@ export const threadUnlocks = sqliteTable('thread_unlocks', {
   threadId: integer('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
+
+export const conversations = sqliteTable('conversations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  user1Id: integer('user1_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  user2Id: integer('user2_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  lastMessageAt: integer('last_message_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
+
+export const messages = sqliteTable('messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  conversationId: integer('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  senderId: integer('sender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
