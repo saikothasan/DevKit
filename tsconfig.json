@@ -1,56 +1,21 @@
 {
   "compilerOptions": {
-    /* Base Options: Targeting modern V8 environments used by Cloudflare Workers */
-    "target": "ESNext",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    
-    /* Bundler & Resolution: Essential for Vite and @cloudflare/vite-plugin */
+    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-    
-    /* Strict Type-Checking */
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    
-    /* Interoperability & Output Constraints */
-    "allowJs": false,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "skipLibCheck": true,
-    
-    /* JSX & Framework Specific */
     "jsx": "react-jsx",
-    
-    /* Path Aliasing: Aligned with the Vite configuration */
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    },
-    
-    /* Environment Typings */
-    "types": [
-      "@cloudflare/workers-types",
-      "vite/client",
-      "node"
-    ]
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["./worker-configuration.d.ts", "vite/client", "node"]
   },
-  "include": [
-    "src/**/*.ts", 
-    "src/**/*.tsx", 
-    "src/**/*.d.ts", 
-    "vite.config.ts"
-  ],
-  "exclude": [
-    "node_modules", 
-    "dist", 
-    ".wrangler",
-    "migrations"
-  ]
+  "include": ["src"]
 }
