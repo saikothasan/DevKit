@@ -14,11 +14,8 @@ export class LiveSession extends DurableObject {
       return new Response('Expected Upgrade: websocket', { status: 426 });
     }
 
-    // Create the WebSocket pair
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
-
-    // Accept the WebSocket connection into the Durable Object
     this.ctx.acceptWebSocket(server);
 
     return new Response(null, {
@@ -34,14 +31,15 @@ export class LiveSession extends DurableObject {
       if (data.type === 'chat_message') {
         const db = drizzle((this.env as any).DB);
         
-        // Asynchronously persist the payload to D1 Database
         const inserted = await db.insert(messages).values({
           conversationId: data.conversationId,
           senderId: data.senderId,
-          content: data.content
+          content: data.content || '',
+          fileUrl: data.fileUrl,
+          fileName: data.fileName,
+          fileType: data.fileType
         }).returning();
 
-        // Update the conversation's sorting timestamp
         await db.update(conversations)
           .set({ lastMessageAt: sql`(strftime('%s', 'now'))` })
           .where(eq(conversations.id, data.conversationId));
@@ -51,10 +49,9 @@ export class LiveSession extends DurableObject {
           message: inserted[0]
         });
 
-        // Multicast to all peers in this specific Durable Object instance
         const sockets = this.ctx.getWebSockets();
         for (const socket of sockets) {
-          if (socket !== ws) { // We skip sender because client handles optimistic UI updates
+          if (socket !== ws) { 
             socket.send(broadcastPayload);
           }
         }
