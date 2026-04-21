@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireAuth } from '@/routes/auth';
+import { requireAuth } from './auth';
 import { drizzle } from 'drizzle-orm/d1';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
