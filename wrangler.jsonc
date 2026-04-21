@@ -10,25 +10,48 @@
   ],
   "route": {
     "pattern": "www.visatk.us/*",
-    "zone_name": "visatk.us",
+    "zone_name": "visatk.us"
   },
   "assets": {
+    "directory": "./public",
     "not_found_handling": "single-page-application",
     "run_worker_first": [
-      "/api/*"
+      "/api/*",
+      "/agents/*",
+      "/oauth/*"
     ]
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true
   },
   "observability": {
     "enabled": true
   },
   "placement": {
-    "mode": "smart",
+    "mode": "smart"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "forum",
       "database_id": "ac8aa89b-786a-47df-8b7a-d5f9eca96b33"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "ChatAgent",
+        "name": "ChatAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ChatAgent"
+      ]
     }
   ]
 }
