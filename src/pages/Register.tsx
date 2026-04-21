@@ -10,7 +10,7 @@ export default function Register() {
   const formRef = useRef<HTMLFormElement>(null);
 
   // Cloudflare Official Testing Keys for local development
-  const siteKey = import.meta.env.VITE_TURNSTILE_SITEKEY || '1x00000000000000000000AA';
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITEKEY || '0x4AAAAAACZdr2afC17LFhhN';
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
