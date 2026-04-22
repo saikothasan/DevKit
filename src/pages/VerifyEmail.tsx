@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, XCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
-import { SeoHead } from '../components/SeoHead';
+import { XCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { SeoHead } from '@/components/SeoHead';
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
