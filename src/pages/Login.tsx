@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
-import { SeoHead } from '../components/SeoHead';
-import { useAuth } from '../context/AuthContext';
+import { SeoHead } from '@/components/SeoHead';
+import { useAuth } from '@/context/AuthContext';
 
 function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -34,7 +34,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!turnstileToken) {
-      setError('Please complete the security check.');
+      setError('Cryptographic security verification required.');
       return;
     }
     
@@ -53,10 +53,7 @@ export default function Login() {
       if (!res.ok) {
         setTurnstileToken(''); 
         setTurnstileKey(prev => prev + 1); 
-        let errMsg = 'Login failed';
-        if (typeof data.error === 'string') errMsg = data.error;
-        else if (data.error?.issues?.[0]?.message) errMsg = data.error.issues[0].message;
-        throw new Error(errMsg);
+        throw new Error(data.error?.issues?.[0]?.message || data.error || 'Authentication execution failed');
       }
       
       await refreshUser();
@@ -69,48 +66,58 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh] p-4 animation-fade-in relative z-10">
-      <SeoHead title="Sign In" description="Authenticate to access the DevKit infrastructure." />
+    <main className="flex items-center justify-center min-h-[80vh] p-4 relative z-10">
+      <SeoHead title="Authenticate Node" description="Establish a secure session to access the DevKit infrastructure." />
       
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-xl relative overflow-hidden">
+      {/* Ambient Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg h-96 bg-orange-500/20 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+
+      <div className="w-full max-w-[420px] bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800/80 rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-zinc-900/5 dark:ring-white/5">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
         
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 mb-4">
-            <LogIn className="w-6 h-6" />
+        <header className="text-center mb-8 animation-fade-in">
+          <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-500/20 text-orange-500 mb-5 shadow-inner">
+            <LogIn className="size-6" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Authentication Protocol</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Provide credentials to access restricted vectors.</p>
-        </div>
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight">Secure Authorization</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm font-medium">Initialize a session to access elite vectors.</p>
+        </header>
 
-        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-medium py-3 rounded-xl transition-colors">
-          <GitHubIcon className="w-5 h-5" />
+        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98] group">
+          <GitHubIcon className="size-5 group-hover:scale-110 transition-transform" />
           Authenticate via GitHub
         </a>
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-zinc-900 text-zinc-500">Or execute via standard vector</span></div>
+          <div className="relative flex justify-center text-sm"><span className="px-3 bg-white dark:bg-[#0a0a0a] text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Or standard protocol</span></div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 shadow-inner animation-fade-in">
+            <AlertCircle className="size-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold leading-snug">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="email" placeholder="Identifier (Email)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
-          </div>
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="password" placeholder="Passphrase" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Routing Address</label>
+            <div className="relative group">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+              <input required type="email" placeholder="entity@domain.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+            </div>
           </div>
 
-          <div className="flex justify-center py-2 min-h-[65px]">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Cryptographic Key</label>
+            <div className="relative group">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+              <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+            </div>
+          </div>
+
+          <div className="flex justify-center py-2 min-h-[65px] bg-zinc-50 dark:bg-zinc-900/30 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <Turnstile
               key={turnstileKey}
               siteKey={siteKey}
@@ -121,15 +128,16 @@ export default function Login() {
             />
           </div>
 
-          <button disabled={isSubmitting || !turnstileToken} className="w-full bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 mt-2">
-            {isSubmitting ? 'Executing...' : 'Initialize Session'}
+          <button disabled={isSubmitting || !turnstileToken} className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 mt-4 shadow-lg active:scale-[0.98]">
+            {isSubmitting ? <Loader2 className="size-5 animate-spin" /> : <LogIn className="size-5" />}
+            {isSubmitting ? 'Establishing Tunnel...' : 'Initialize Session'}
           </button>
         </form>
 
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8">
-          Unregistered node? <Link to="/register" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Establish Vector</Link>
-        </p>
+        <footer className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-800">
+          Unregistered node? <Link to="/register" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors inline-flex items-center gap-1">Establish Vector <ArrowRight className="size-3" /></Link>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 }
