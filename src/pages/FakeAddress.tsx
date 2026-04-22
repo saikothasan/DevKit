@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { SeoHead } from '../components/SeoHead';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { 
-  Copy, Check, Sparkles, MapPin, UserSquare2, Globe, Loader2, ArrowLeft,
-  Briefcase, Wifi, Database, FileCode2, Shield, ChevronRight
+  Copy, Check, MapPin, UserSquare2, Globe, Loader2, ArrowLeft,
+  Briefcase, Wifi, Database, FileCode2, Shield, ChevronRight, RefreshCw, MousePointerClick
 } from 'lucide-react';
 
 // Static import strictly enforcing synchronous loading without dynamic imports
@@ -51,7 +51,6 @@ const baseCountryMap: Record<string, string> = {
   'ky': 'KG', 'tk': 'TM', 'mn': 'MN', 'sq': 'AL', 'mk': 'MK', 'bs': 'BA', 'is': 'IS', 'mt': 'MT', 'dv': 'MV'
 };
 
-// Programmatically extract and structure every single locale from the @faker-js/faker API instance
 const SUPPORTED_LOCALES = Object.keys(allFakers)
   .filter(code => code !== 'base')
   .reduce((acc, localeCode) => {
@@ -91,7 +90,6 @@ const FAQ_DATA = [
   { question: "How many regional locales are supported?", answer: "The localization engine automatically parses over 70+ locales directly from the Faker API, generating culturally accurate names, appropriate state/province abbreviations, and mathematically correct postal code formats for regions worldwide." }
 ];
 
-// Utility UI Components to maintain clean code
 const SectionTitle = ({ icon: Icon, title }: { icon: any, title: string }) => (
   <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-200 dark:border-zinc-800">
     <Icon className="size-4 text-orange-500" />
@@ -99,35 +97,50 @@ const SectionTitle = ({ icon: Icon, title }: { icon: any, title: string }) => (
   </div>
 );
 
-const DataField = ({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) => (
-  <div className="mb-4 last:mb-0">
-    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">{label}</label>
-    <div className={`text-sm font-medium text-zinc-900 dark:text-zinc-100 break-all ${mono ? 'font-mono bg-zinc-200/50 dark:bg-zinc-800/50 inline-block px-2.5 py-1 rounded-md' : ''}`}>
-      {value}
+const InteractiveDataField = ({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!value || value === 'N/A') return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div 
+      onClick={handleCopy}
+      className="group relative p-3 -mx-3 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-all cursor-pointer border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700/50"
+      title={`Copy ${label}`}
+    >
+      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 cursor-pointer">{label}</label>
+      <div className="flex items-start justify-between gap-4">
+        <div className={`text-sm font-medium text-zinc-900 dark:text-zinc-100 break-all transition-colors group-hover:text-orange-600 dark:group-hover:text-orange-400 ${mono ? 'font-mono text-[13px] bg-zinc-200/50 dark:bg-black/50 px-2 py-0.5 rounded border border-zinc-300/50 dark:border-zinc-800' : ''}`}>
+          {value}
+        </div>
+        <div className="shrink-0 text-zinc-400 group-hover:text-orange-500 transition-colors">
+          {copied ? <Check className="size-4 text-emerald-500 scale-110 transition-transform" /> : <Copy className="size-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function FakeAddress() {
   const { locale } = useParams<{ locale: string }>();
   const navigate = useNavigate();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const { copiedText, copy } = useCopyToClipboard();
-
-  useEffect(() => {
-    if (locale && !SUPPORTED_LOCALES[locale]) {
-      navigate('/fake-address', { replace: true });
-    }
-  }, [locale, navigate]);
 
   const activeLocaleData = locale ? SUPPORTED_LOCALES[locale] : null;
 
-  const generateIdentity = () => {
-    if (!activeLocaleData) return;
+  const generateIdentity = useCallback(() => {
+    if (!activeLocaleData || isGenerating) return;
     setIsGenerating(true);
     
-    // Process heavy generation with minor delay for distinct visual UX feedback
     setTimeout(() => {
       try {
         const faker = allFakers[activeLocaleData.code as keyof typeof allFakers] || allFakers['en'];
@@ -182,8 +195,23 @@ export default function FakeAddress() {
       } finally {
         setIsGenerating(false);
       }
-    }, 150);
-  };
+    }, 200);
+  }, [activeLocaleData, isGenerating]);
+
+  // Handle incorrect locale routes
+  useEffect(() => {
+    if (locale && !SUPPORTED_LOCALES[locale]) {
+      navigate('/fake-address', { replace: true });
+    }
+  }, [locale, navigate]);
+
+  // Auto-generate on initial load of a valid locale
+  useEffect(() => {
+    if (activeLocaleData && !identity && !isGenerating && !initialLoadComplete) {
+      setInitialLoadComplete(true);
+      generateIdentity();
+    }
+  }, [activeLocaleData, identity, isGenerating, initialLoadComplete, generateIdentity]);
 
   const formattedOutput = identity ? 
     `[Personal Profile]\nName: ${identity.fullName}\nGender: ${identity.gender}\nDOB: ${identity.dateOfBirth}\nPhone: ${identity.phone}\nID: ${identity.idNumber}\nUUID: ${identity.uuid}\n\n[Professional]\nJob Title: ${identity.jobTitle}\nDepartment: ${identity.department}\nCompany: ${identity.company}\n\n[Location]\nAddress: ${identity.street}, ${identity.secondaryAddress}\nCity/State: ${identity.city}, ${identity.state}\nZip Code: ${identity.zip}\nCountry: ${identity.country}\nTimezone: ${identity.timezone}\nGeo: ${identity.coordinates}\n\n[Digital Footprint]\nEmail: ${identity.email}\nUsername: ${identity.username}\nPassword: ${identity.password}\nIP: ${identity.ipAddress}\nMAC: ${identity.macAddress}\nUser-Agent: ${identity.userAgent}\n\n[Financial Vector]\nCard: ${identity.ccIssuer} - ${identity.creditCard} (CVV: ${identity.cvv})\nIBAN: ${identity.iban}\nBTC Address: ${identity.cryptoAddress}` : '';
@@ -206,7 +234,7 @@ export default function FakeAddress() {
         />
         
         <div className="mb-12 text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-6 shadow-sm">
             <Globe className="size-3.5 fill-current" /> Global Identity Engine
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Select Localization Profile</h1>
@@ -251,100 +279,116 @@ export default function FakeAddress() {
         faqData={FAQ_DATA}
       />
       
-      <div className="mb-8 md:mb-10">
-        <Link to="/fake-address" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6">
-          <ArrowLeft className="size-4" /> Back to Global Directory
-        </Link>
-        
-        <div className="flex items-center gap-4 mb-4">
-          <span className="text-4xl filter drop-shadow-md">{activeLocaleData?.flag}</span>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{activeLocaleData?.name} Identity Generator</h1>
+      <div className="mb-8 md:mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <Link to="/fake-address" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6">
+            <ArrowLeft className="size-4" /> Back to Global Directory
+          </Link>
+          
+          <div className="flex items-center gap-4 mb-4">
+            <span className="text-4xl filter drop-shadow-md">{activeLocaleData?.flag}</span>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{activeLocaleData?.name} Identity Vector</h1>
+          </div>
+          <p className="text-lg text-zinc-500 dark:text-zinc-400 max-w-2xl">Instantly generate structurally valid identity payloads, financial traces, and digital footprints localized explicitly for {activeLocaleData?.name}.</p>
         </div>
-        <p className="text-lg text-zinc-500 dark:text-zinc-400">Instantly generate structurally valid identity vectors, financial traces, and digital footprints localized explicitly for {activeLocaleData?.name}.</p>
+        
+        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-500/20 shrink-0">
+          <MousePointerClick className="size-4" /> Click any field to copy
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 p-6 md:p-10 mb-16">
+      <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 p-6 md:p-10 mb-16 relative overflow-hidden">
         
+        {isGenerating && identity && (
+          <div className="absolute inset-0 z-10 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm flex items-center justify-center rounded-3xl transition-all">
+            <Loader2 className="size-10 text-orange-500 animate-spin" />
+          </div>
+        )}
+
         {identity ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             
             {/* Column 1: Personal Data */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800 shadow-inner">
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
               <SectionTitle icon={UserSquare2} title="Personal Profile" />
-              <div className="flex items-center gap-4 mb-5">
-                <img src={identity.avatar} alt="Avatar" className="size-14 rounded-full bg-zinc-200 dark:bg-zinc-800 object-cover shadow-sm" />
-                <div>
-                  <DataField label="Full Name" value={identity.fullName} />
+              <div className="flex items-center gap-4 mb-5 p-3 -mx-3 rounded-xl">
+                <img src={identity.avatar} alt="Avatar" className="size-14 rounded-full bg-zinc-200 dark:bg-zinc-800 object-cover shadow-sm ring-2 ring-white dark:ring-zinc-900" />
+                <div className="flex-1">
+                  <InteractiveDataField label="Full Name" value={identity.fullName} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="Gender" value={identity.gender} />
-                <DataField label="Date of Birth" value={identity.dateOfBirth} />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Gender" value={identity.gender} />
+                <InteractiveDataField label="Date of Birth" value={identity.dateOfBirth} />
               </div>
-              <DataField label="Phone Number" value={identity.phone} mono />
-              <DataField label="National ID / SSN" value={identity.idNumber} mono />
-              <DataField label="Identity UUID" value={identity.uuid} mono />
+              <InteractiveDataField label="Phone Number" value={identity.phone} mono />
+              <InteractiveDataField label="National ID / SSN" value={identity.idNumber} mono />
+              <InteractiveDataField label="Identity UUID" value={identity.uuid} mono />
             </div>
 
             {/* Column 2: Professional & Location */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800 shadow-inner">
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
               <SectionTitle icon={Briefcase} title="Professional & Locale" />
-              <DataField label="Job Title" value={identity.jobTitle} />
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="Company" value={identity.company} />
-                <DataField label="Department" value={identity.department} />
+              <InteractiveDataField label="Job Title" value={identity.jobTitle} />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Company" value={identity.company} />
+                <InteractiveDataField label="Department" value={identity.department} />
               </div>
               
-              <div className="my-5 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
+              <div className="my-3 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
               
-              <DataField label="Street Address" value={`${identity.street}, ${identity.secondaryAddress}`} />
-              <DataField label="City & Region" value={`${identity.city}, ${identity.state} ${identity.zip}`} />
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="Country" value={identity.country} />
-                <DataField label="Timezone" value={identity.timezone} />
+              <InteractiveDataField label="Street Address" value={`${identity.street}, ${identity.secondaryAddress}`} />
+              <InteractiveDataField label="City & Region" value={`${identity.city}, ${identity.state} ${identity.zip}`} />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Country" value={identity.country} />
+                <InteractiveDataField label="Timezone" value={identity.timezone} />
               </div>
-              <DataField label="Geo Coordinates" value={identity.coordinates} mono />
+              <InteractiveDataField label="Geo Coordinates" value={identity.coordinates} mono />
             </div>
 
             {/* Column 3: Digital & Financial */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800 shadow-inner md:col-span-2 lg:col-span-1">
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm md:col-span-2 lg:col-span-1">
               <SectionTitle icon={Wifi} title="Digital & Financial" />
-              <DataField label="Email Address" value={identity.email} />
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="Username" value={identity.username} mono />
-                <DataField label="Password" value={identity.password} mono />
+              <InteractiveDataField label="Email Address" value={identity.email} />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Username" value={identity.username} mono />
+                <InteractiveDataField label="Password" value={identity.password} mono />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="IP Address" value={identity.ipAddress} mono />
-                <DataField label="MAC Address" value={identity.macAddress} mono />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="IP Address" value={identity.ipAddress} mono />
+                <InteractiveDataField label="MAC Address" value={identity.macAddress} mono />
               </div>
               
-              <div className="my-5 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
+              <div className="my-3 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
               
-              <DataField label="Credit Card" value={`${identity.ccIssuer} - ${identity.creditCard}`} mono />
-              <div className="grid grid-cols-2 gap-4">
-                <DataField label="CVV" value={identity.cvv} mono />
-                <DataField label="IBAN" value={identity.iban} mono />
+              <InteractiveDataField label="Credit Card" value={`${identity.ccIssuer} - ${identity.creditCard}`} mono />
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="CVV" value={identity.cvv} mono />
+                <InteractiveDataField label="IBAN" value={identity.iban} mono />
               </div>
-              <DataField label="Bitcoin Address" value={identity.cryptoAddress} mono />
+              <InteractiveDataField label="Bitcoin Address" value={identity.cryptoAddress} mono />
             </div>
 
           </div>
         ) : (
           <div className="h-64 flex flex-col items-center justify-center bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl border border-zinc-200 dark:border-zinc-800 border-dashed mb-8 transition-colors">
-            <span className="text-6xl filter drop-shadow-sm mb-4 grayscale opacity-50">{activeLocaleData?.flag}</span>
-            <p className="text-zinc-500 font-medium">System ready. Click generate to synthesize a comprehensive footprint.</p>
+            {isGenerating ? (
+              <Loader2 className="size-10 text-orange-500 animate-spin mb-4" />
+            ) : (
+              <span className="text-6xl filter drop-shadow-sm mb-4 grayscale opacity-50">{activeLocaleData?.flag}</span>
+            )}
+            <p className="text-zinc-500 font-medium">{isGenerating ? 'Synthesizing Architecture...' : 'Awaiting System Initialization...'}</p>
           </div>
         )}
         
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
           <button onClick={generateIdentity} disabled={isGenerating} className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-base font-bold rounded-2xl hover:bg-orange-500 dark:hover:bg-orange-500 dark:hover:text-white transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-70">
-            {isGenerating ? <Loader2 className="size-5 animate-spin" /> : <Sparkles className="size-5" />}
-            {isGenerating ? 'Synthesizing Footprint...' : `Generate ${activeLocaleData?.name} Footprint`}
+            <RefreshCw className={`size-5 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Regenerating...' : 'Regenerate Footprint'}
           </button>
           <button onClick={() => copy(formattedOutput)} disabled={!identity || isGenerating} className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 text-base font-bold rounded-2xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${copiedText ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white dark:bg-[#0a0a0a] text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm'}`}>
             {copiedText ? <Check className="size-5" /> : <Copy className="size-5" />}
-            {copiedText ? 'Vector Copied' : 'Copy Full Data'}
+            {copiedText ? 'Vector Copied Successfully' : 'Copy Full Vector payload'}
           </button>
         </div>
       </div>
@@ -356,7 +400,7 @@ export default function FakeAddress() {
           <div className="space-y-3">
             <div className="size-10 bg-orange-500/10 rounded-lg flex items-center justify-center text-orange-500 border border-orange-500/20 mb-4"><Database className="size-5" /></div>
             <h3 className="font-bold text-lg">Database Seeding</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Instantly populate pre-production databases with thousands of localized records. Ensures that pagination, sorting, and regional search algorithms can be tested comprehensively before launch.</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Instantly populate pre-production databases with localized records. Ensures that pagination, sorting, and regional search algorithms can be tested comprehensively before launch.</p>
           </div>
           <div className="space-y-3">
             <div className="size-10 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500 border border-blue-500/20 mb-4"><FileCode2 className="size-5" /></div>
