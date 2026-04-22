@@ -11,6 +11,9 @@ interface CheckedBin {
   country?: string;
   funding?: string;
   length?: number;
+  rangeLow?: string;
+  rangeHigh?: string;
+  fullData?: any;
   time: number;
 }
 
@@ -29,7 +32,7 @@ export default function BinChecker() {
 
   const handleStart = async () => {
     const lines = input.split('\n').map(c => c.trim()).filter(c => c.length >= 6);
-    const bins = lines.map(line => line.replace(/\D/g, '').substring(0, 6)).filter(b => b.length === 6);
+    const bins = lines.map(line => line.replace(/\D/g, '').substring(0, 8)).filter(b => b.length >= 6);
     
     if (bins.length === 0) return;
 
@@ -53,11 +56,16 @@ export default function BinChecker() {
         
         const data = await res.json() as any;
         
-        if (data.success) {
+        if (data.success && data.fullResponse?.data?.[0]) {
+          const item = data.fullResponse.data[0];
           setResults(prev => [{
-            raw: bins[i], status: 'Found', brand: data.metadata.brand,
-            country: data.metadata.country, funding: data.metadata.funding,
-            length: data.metadata.pan_length, time: Date.now() - startTime
+            raw: bins[i], status: 'Found', brand: item.brand,
+            country: item.country, funding: item.funding,
+            length: item.pan_length, 
+            rangeLow: item.account_range_low,
+            rangeHigh: item.account_range_high,
+            fullData: item,
+            time: Date.now() - startTime
           }, ...prev]);
         } else {
           setResults(prev => [{ raw: bins[i], status: 'Not Found', time: Date.now() - startTime }, ...prev]);
@@ -95,18 +103,15 @@ export default function BinChecker() {
         faqData={FAQ_DATA}
       />
       
-      {/* Header */}
       <div className="mb-8 md:mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4 shadow-sm">
           <Database className="size-3.5 fill-current" /> Metadata API Integration
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Credit Card BIN Lookup Engine</h1>
-        <p className="text-lg text-zinc-500 dark:text-zinc-400">Query global issuer networks to instantly identify card brands, funding sources, and geographic origin.</p>
+        <p className="text-lg text-zinc-500 dark:text-zinc-400">Query global issuer networks to instantly identify card brands, ranges, and geographic origin.</p>
       </div>
 
-      {/* Main App Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-16">
-        {/* Input Column */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 overflow-hidden flex flex-col h-[500px]">
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#0a0a0a]/50 flex items-center justify-between">
@@ -150,7 +155,6 @@ export default function BinChecker() {
           )}
         </div>
 
-        {/* Output Column */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
@@ -181,22 +185,34 @@ export default function BinChecker() {
               ) : (
                 <div className="space-y-2">
                   {results.map((res, idx) => (
-                    <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border text-sm transition-colors ${res.status === 'Found' ? 'bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700' : res.status === 'Not Found' ? 'bg-amber-500/5 border-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-red-500/5 border-red-500/20 text-red-700 dark:text-red-400'}`}>
-                      <div className="flex items-center gap-4 mb-2 sm:mb-0">
-                        <span className="font-mono font-bold text-base bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-lg select-all">{res.raw}</span>
-                        {res.status === 'Found' && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold uppercase tracking-wider rounded-md border border-zinc-200 dark:border-zinc-700">{res.brand}</span>
-                            <span className="px-2.5 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-500/20">{res.funding}</span>
-                            <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-500/20">{res.country}</span>
+                    <div key={idx} className={`flex flex-col sm:flex-row justify-between p-4 rounded-xl border text-sm transition-colors ${res.status === 'Found' ? 'bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700' : res.status === 'Not Found' ? 'bg-amber-500/5 border-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-red-500/5 border-red-500/20 text-red-700 dark:text-red-400'}`}>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-4">
+                          <span className="font-mono font-bold text-base bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-lg select-all">{res.raw}</span>
+                          {res.status === 'Found' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold uppercase tracking-wider rounded-md border border-zinc-200 dark:border-zinc-700">{res.brand}</span>
+                              <span className="px-2.5 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-500/20">{res.funding}</span>
+                              <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-500/20">{res.country}</span>
+                              <span className="px-2.5 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-purple-500/20">Len: {res.length}</span>
+                            </div>
+                          )}
+                        </div>
+                        {res.status === 'Found' && res.rangeLow && res.rangeHigh && (
+                          <div className="text-[10px] text-zinc-500 font-mono tracking-wider ml-1 mt-1">
+                            ACCOUNT RANGE: {res.rangeLow} - {res.rangeHigh}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs opacity-50 font-mono">[{res.time}ms]</span>
-                        {res.status !== 'Found' && (
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${res.status === 'Not Found' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>{res.status}</span>
-                        )}
+                      <div className="flex flex-col items-end justify-start gap-2 shrink-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs opacity-50 font-mono">[{res.time}ms]</span>
+                          {res.status !== 'Found' ? (
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${res.status === 'Not Found' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>{res.status}</span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">Found</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -207,7 +223,6 @@ export default function BinChecker() {
         </div>
       </div>
 
-      {/* Deep SEO Content Section */}
       <article className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm">
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Comprehensive Guide to BIN Lookups & Verification</h2>
         
