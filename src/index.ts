@@ -5,7 +5,6 @@ import { forumRouter } from './routes/forum';
 import { toolsRouter } from './routes/tools';
 import { chatRouter } from './routes/chat';
 import { uploadRouter } from './routes/upload';
-import { LiveSession } from './do/LiveSession';
 
 const app = new Hono();
 
@@ -18,5 +17,3 @@ app.route('/api/chat', chatRouter);
 app.route('/api/upload', uploadRouter); 
 
 export default { fetch: app.fetch };
-
-export { LiveSession };
