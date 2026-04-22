@@ -17,6 +17,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileKey, setTurnstileKey] = useState(0); 
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { refreshUser } = useAuth();
@@ -50,7 +51,8 @@ export default function Login() {
       const data = await res.json() as any;
       
       if (!res.ok) {
-        setTurnstileToken(''); // Force re-challenge
+        setTurnstileToken(''); 
+        setTurnstileKey(prev => prev + 1); 
         let errMsg = 'Login failed';
         if (typeof data.error === 'string') errMsg = data.error;
         else if (data.error?.issues?.[0]?.message) errMsg = data.error.issues[0].message;
@@ -68,7 +70,7 @@ export default function Login() {
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] p-4 animation-fade-in relative z-10">
-      <SeoHead title="Sign In" description="Sign in to DevKit Pro to participate in the community forum." />
+      <SeoHead title="Sign In" description="Authenticate to access the DevKit infrastructure." />
       
       <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
@@ -77,39 +79,40 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 mb-4">
             <LogIn className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Welcome Back</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Sign in to your account to continue</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Authentication Protocol</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Provide credentials to access restricted vectors.</p>
         </div>
 
         <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-medium py-3 rounded-xl transition-colors">
           <GitHubIcon className="w-5 h-5" />
-          Sign in with GitHub
+          Authenticate via GitHub
         </a>
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-zinc-900 text-zinc-500">Or continue with email</span></div>
+          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-zinc-900 text-zinc-500">Or execute via standard vector</span></div>
         </div>
 
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+            <input required type="email" placeholder="Identifier (Email)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
           </div>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+            <input required type="password" placeholder="Passphrase" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
           </div>
 
           <div className="flex justify-center py-2 min-h-[65px]">
             <Turnstile
+              key={turnstileKey}
               siteKey={siteKey}
               onSuccess={(token) => setTurnstileToken(token)}
               onError={() => setTurnstileToken('')}
@@ -119,12 +122,12 @@ export default function Login() {
           </div>
 
           <button disabled={isSubmitting || !turnstileToken} className="w-full bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 mt-2">
-            {isSubmitting ? 'Signing in...' : 'Sign In'}
+            {isSubmitting ? 'Executing...' : 'Initialize Session'}
           </button>
         </form>
 
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8">
-          Don't have an account? <Link to="/register" className="font-semibold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Sign up</Link>
+          Unregistered node? <Link to="/register" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Establish Vector</Link>
         </p>
       </div>
     </div>
