@@ -5,7 +5,8 @@ import {
   MapPin, 
   MessageSquare, 
   Send,
-  Network
+  Network,
+  Mail
 } from 'lucide-react';
 
 export interface NavItem {
@@ -23,6 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/bin-checker', icon: CreditCard, label: 'BIN Lookup', group: 'Utilities' },
   { to: '/test-cards', icon: Terminal, label: 'Vector Gen', group: 'Utilities' },
   { to: '/fake-address', icon: MapPin, label: 'Mock Identity', group: 'Utilities' },
+  { to: '/temp-mail', icon: Mail, label: 'Temp Mail', group: 'Utilities' },
   
   // Community & Communications Layer
   { to: '/', icon: MessageSquare, label: 'Discussion Board', group: 'Community' },
