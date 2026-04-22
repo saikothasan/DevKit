@@ -34,12 +34,13 @@ export default function TestCards() {
   const { copiedText, copy } = useCopyToClipboard();
 
   const detectedNetwork = useMemo(() => {
-    if (bin.startsWith('34') || bin.startsWith('37')) return 'American Express';
-    if (bin.startsWith('4')) return 'Visa';
-    if (/^5[1-5]/.test(bin) || /^2[2-7]/.test(bin)) return 'Mastercard';
-    if (bin.startsWith('6')) return 'Discover';
-    if (bin.startsWith('35')) return 'JCB';
+    if (/^3[47]/.test(bin)) return 'American Express';
+    if (/^5[1-5]/.test(bin) || /^2(2[2-9][1-9]|2[3-9]\d{2}|[3-6]\d{3}|7[0-1]\d{2}|720)/.test(bin)) return 'Mastercard';
+    if (/^4/.test(bin)) return 'Visa';
+    if (/^6(?:011|5\d{2}|4[4-9]\d|22(?:12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))/.test(bin)) return 'Discover';
+    if (/^35/.test(bin)) return 'JCB';
     if (/^3(?:0[0-5]|[68])/.test(bin)) return 'Diners Club';
+    if (/^62/.test(bin)) return 'China UnionPay';
     return bin.length > 0 ? 'Custom Network' : 'Awaiting BIN...';
   }, [bin]);
 
@@ -81,7 +82,6 @@ export default function TestCards() {
         faqData={FAQ_DATA}
       />
       
-      {/* Header */}
       <div className="mb-8 md:mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4 shadow-sm">
           <Database className="size-3.5 fill-current" /> Structurally Valid QA Payload
@@ -94,7 +94,6 @@ export default function TestCards() {
         </div>
       </div>
 
-      {/* Main Tool UI */}
       <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 overflow-hidden mb-16">
         
         <div className="p-6 md:p-8 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#0a0a0a]/50">
@@ -166,7 +165,6 @@ export default function TestCards() {
         </div>
       </div>
 
-      {/* Deep SEO Content Section */}
       <article className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm">
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Why Use a Luhn-Valid Credit Card Generator?</h2>
         
