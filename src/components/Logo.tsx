@@ -14,11 +14,11 @@ export function Logo({ className = "size-8", ...props }: LogoProps) {
     >
       <defs>
         <linearGradient id="brandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#ea580c" />
-          <stop offset="100%" stop-color="#fb923c" />
+          <stop offset="0%" stopColor="#ea580c" />
+          <stop offset="100%" stopColor="#fb923c" />
         </linearGradient>
         <filter id="innerShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#c2410c" flood-opacity="0.6" />
+          <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#c2410c" floodOpacity="0.6" />
         </filter>
       </defs>
 
