@@ -1,50 +1,56 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { Loader2 } from 'lucide-react';
 
-// Application Pages
-import Forum from '@/pages/Forum';
-import Thread from '@/pages/Thread';
-import Login from '@/pages/Login';
-import Register from '@/pages/Register';
-import VerifyEmail from '@/pages/VerifyEmail';
-import Profile from '@/pages/Profile';
-import Messages from '@/pages/Messages';
+// Code-splitting strategy applied to all heavyweight vectors
+const Forum = lazy(() => import('@/pages/Forum'));
+const Thread = lazy(() => import('@/pages/Thread'));
+const Login = lazy(() => import('@/pages/Login'));
+const Register = lazy(() => import('@/pages/Register'));
+const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'));
+const Profile = lazy(() => import('@/pages/Profile'));
+const Messages = lazy(() => import('@/pages/Messages'));
+const TestCards = lazy(() => import('@/pages/TestCards'));
+const FakeAddress = lazy(() => import('@/pages/FakeAddress'));
+const CardChecker = lazy(() => import('@/pages/CardChecker'));
+const BinChecker = lazy(() => import('@/pages/BinChecker'));
+const VIPPlan = lazy(() => import('@/pages/VIP'));
 
-// Development Tools & Utilities
-import TestCards from '@/pages/TestCards';
-import FakeAddress from '@/pages/FakeAddress';
-import CardChecker from '@/pages/CardChecker';
-import BinChecker from '@/pages/BinChecker';
+const PageLoader = () => (
+  <div className="flex min-h-[50vh] items-center justify-center">
+    <Loader2 className="size-10 text-orange-500 animate-spin" />
+  </div>
+);
 
 export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            {/* Primary Community Routing */}
-            <Route index element={<Forum />} />
-            <Route path="forum/:id" element={<Thread />} />
-            
-            {/* Engineering Utilities Routing */}
-            <Route path="test-cards" element={<TestCards />} />
-            <Route path="fake-address" element={<FakeAddress />} />
-            <Route path="fake-address/:locale" element={<FakeAddress />} />
-            <Route path="card-checker" element={<CardChecker />} />
-            <Route path="bin-checker" element={<BinChecker />} />
-            
-            {/* Real-time Data Routing */}
-            <Route path="messages" element={<Messages />} />
-            
-            {/* Identity Access Management Routing */}
-            <Route path="login" element={<Login />} />
-            <Route path="register" element={<Register />} />
-            <Route path="verify-email" element={<VerifyEmail />} />
-            <Route path="profile/:username" element={<Profile />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Forum />} />
+              <Route path="forum/:id" element={<Thread />} />
+              <Route path="vip" element={<VIPPlan />} />
+              
+              <Route path="test-cards" element={<TestCards />} />
+              <Route path="fake-address" element={<FakeAddress />} />
+              <Route path="fake-address/:locale" element={<FakeAddress />} />
+              <Route path="card-checker" element={<CardChecker />} />
+              <Route path="bin-checker" element={<BinChecker />} />
+              
+              <Route path="messages" element={<Messages />} />
+              
+              <Route path="login" element={<Login />} />
+              <Route path="register" element={<Register />} />
+              <Route path="verify-email" element={<VerifyEmail />} />
+              <Route path="profile/:username" element={<Profile />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </ToastProvider>
   );
