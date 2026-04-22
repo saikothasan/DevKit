@@ -21,6 +21,8 @@ interface GeneratedCard {
 
 interface StripeMetadataResponse {
   data?: Array<{
+    account_range_high?: string;
+    account_range_low?: string;
     brand?: string;
     country?: string;
     funding?: string;
@@ -29,15 +31,36 @@ interface StripeMetadataResponse {
 }
 
 const generateCardsSchema = z.object({
-  bin: z.string().min(1).max(16).regex(/^[0-9]+$/),
+  bin: z.string().min(1).max(19).regex(/^[0-9]+$/),
   quantity: z.number().min(1).max(500).default(10)
 });
 
+/**
+ * Enhanced BIN resolution using complete global network range limits
+ */
 function getCardNetworkSpecs(bin: string): CardSpecs {
-  if (bin.startsWith('34') || bin.startsWith('37')) return { network: 'American Express', length: 15, cvvLength: 4 };
-  if (bin.startsWith('4')) return { network: 'Visa', length: 16, cvvLength: 3 };
-  if (/^5[1-5]/.test(bin) || /^2[2-7]/.test(bin)) return { network: 'Mastercard', length: 16, cvvLength: 3 };
-  if (bin.startsWith('6')) return { network: 'Discover', length: 16, cvvLength: 3 };
+  // American Express (Length 15)
+  if (/^3[47]/.test(bin)) return { network: 'American Express', length: 15, cvvLength: 4 };
+  
+  // Mastercard (Length 16)
+  if (/^5[1-5]/.test(bin) || /^2(2[2-9][1-9]|2[3-9]\d{2}|[3-6]\d{3}|7[0-1]\d{2}|720)/.test(bin)) return { network: 'Mastercard', length: 16, cvvLength: 3 };
+  
+  // Visa (Length 16)
+  if (/^4/.test(bin)) return { network: 'Visa', length: 16, cvvLength: 3 };
+  
+  // Discover Card (Length 16)
+  if (/^6(?:011|5\d{2}|4[4-9]\d|22(?:12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))/.test(bin)) return { network: 'Discover', length: 16, cvvLength: 3 };
+  
+  // JCB (Length 16)
+  if (/^35/.test(bin)) return { network: 'JCB', length: 16, cvvLength: 3 };
+  
+  // Diners Club (Length 14 or 16)
+  if (/^3(?:0[0-5]|[68])/.test(bin)) return { network: 'Diners Club', length: 14, cvvLength: 3 };
+  if (/^5[45]/.test(bin)) return { network: 'Diners Club US', length: 16, cvvLength: 3 };
+  
+  // China UnionPay (Length 16 to 19)
+  if (/^62/.test(bin)) return { network: 'China UnionPay', length: 16, cvvLength: 3 }; 
+
   return { network: 'Unknown', length: 16, cvvLength: 3 };
 }
 
@@ -130,7 +153,7 @@ toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) =
   }
 });
 
-const checkBinSchema = z.object({ bin: z.string().min(6).max(16).regex(/^[0-9]+$/) });
+const checkBinSchema = z.object({ bin: z.string().min(6).max(19).regex(/^[0-9]+$/) });
 
 toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => {
   const { bin } = c.req.valid('json');
@@ -140,16 +163,12 @@ toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => 
     
     const data = await response.json() as StripeMetadataResponse;
     
+    // Pass the full response data cleanly to the client
     if (data?.data && data.data.length > 0) {
-      const primaryData = data.data[0];
       return c.json({ 
         success: true, 
-        metadata: { 
-          brand: primaryData.brand || 'UNKNOWN', 
-          country: primaryData.country || 'UNKNOWN', 
-          funding: primaryData.funding || 'UNKNOWN', 
-          pan_length: primaryData.pan_length || 16 
-        }
+        metadata: data.data[0],
+        fullResponse: data
       });
     }
     return c.json({ success: false, message: 'BIN not found' });
