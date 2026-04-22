@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { User, LogIn, Menu, X, LogOut, Flame } from 'lucide-react';
 import { Logo } from '../Logo';
-import { NAV_ITEMS } from '../../config/navigation';
-import { useAuth } from '../../context/AuthContext';
+import { NAV_ITEMS } from '@/config/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export function MobileHeader() {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,7 +40,7 @@ export function MobileHeader() {
         
         <NavLink to="/" className="flex items-center gap-2 font-semibold">
           <Logo className="h-5 w-5 sm:h-6 sm:w-6" />
-          <span className="text-zinc-900 dark:text-zinc-100">DevKit Pro</span>
+          <span className="text-zinc-900 dark:text-zinc-100">Visatk</span>
         </NavLink>
         
         {user && (
