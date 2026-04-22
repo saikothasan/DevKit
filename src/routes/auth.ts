@@ -102,6 +102,12 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
 
   const ephemeralId = validation.metadata?.ephemeral_id || validation.ephemeral_id;
 
+  if (ephemeralId) {
+    const recentSignups = await db.select({ value: count() }).from(turnstileEvents)
+      .where(and(eq(turnstileEvents.ephemeralId, ephemeralId), eq(turnstileEvents.eventType, 'signup'), sql`${turnstileEvents.createdAt} > (strftime('%s', 'now') - 3600)`)).get();
+    if (recentSignups && recentSignups.value >= 3) return c.json({ error: 'Rate limit exceeded for this node.' }, 429);
+  }
+
   try {
     const existingEmail = await db.select().from(users).where(eq(users.email, email)).get();
     if (existingEmail) return c.json({ error: 'Vector collision: Address registered' }, 409);
@@ -186,6 +192,71 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
   
   setCookie(c, 'auth_token', jwt, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 604800 });
   return c.json({ success: true });
+});
+
+// ==========================================
+// OAuth Execution Vectors
+// ==========================================
+
+authRouter.get('/github', async (c) => {
+  const clientId = c.env.GITHUB_CLIENT_ID;
+  if (!clientId) return c.json({ error: 'OAuth module inactive' }, 500);
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(`${new URL(c.req.url).origin}/api/auth/github/callback`)}&scope=read:user user:email`;
+  return c.redirect(url);
+});
+
+authRouter.get('/github/callback', async (c) => {
+  const code = c.req.query('code');
+  if (!code) return c.redirect('/login?error=Authorization+failed');
+
+  try {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: c.env.GITHUB_CLIENT_ID, client_secret: c.env.GITHUB_CLIENT_SECRET, code }),
+    });
+
+    const tokenData = await tokenRes.json() as any;
+    if (tokenData.error) throw new Error(tokenData.error_description);
+
+    const headers = { 'Authorization': `Bearer ${tokenData.access_token}`, 'User-Agent': 'DevKit-Worker-Edge' };
+    const [userRes, emailRes] = await Promise.all([
+      fetch('https://api.github.com/user', { headers }),
+      fetch('https://api.github.com/user/emails', { headers })
+    ]);
+    
+    const githubUser = await userRes.json() as any;
+    const emails = await emailRes.json() as any[];
+    
+    const primaryEmail = emails.find(e => e.primary && e.verified) || emails.find(e => e.verified) || emails[0];
+    if (!primaryEmail || !primaryEmail.email) throw new Error('Verified email vector required.');
+
+    const db = drizzle(c.env.DB);
+    let user = await db.select().from(users).where(eq(users.githubId, githubUser.id.toString())).get();
+
+    if (!user) {
+      user = await db.select().from(users).where(eq(users.email, primaryEmail.email)).get();
+      if (user) {
+        await db.update(users).set({ githubId: githubUser.id.toString(), isVerified: true }).where(eq(users.id, user.id));
+      } else {
+        const isFirstUser = (await db.select({ value: count() }).from(users).get())?.value === 0;
+        let username = githubUser.login;
+        if (await db.select().from(users).where(eq(users.username, username)).get()) username = `${username}_${Math.floor(Math.random() * 1000)}`;
+
+        const newUser = await db.insert(users).values({
+          username, email: primaryEmail.email, githubId: githubUser.id.toString(), avatarUrl: githubUser.avatar_url, role: isFirstUser ? 'admin' : 'user', isVerified: true 
+        }).returning();
+        user = newUser[0];
+      }
+    }
+
+    const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 604800 };
+    const token = await sign(payload, getSecret(c), 'HS256');
+    setCookie(c, 'auth_token', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 604800 });
+    
+    return c.redirect('/');
+  } catch (err: any) {
+    return c.redirect(`/login?error=${encodeURIComponent(err.message || 'OAuth failure')}`);
+  }
 });
 
 authRouter.post('/logout', async (c) => {
