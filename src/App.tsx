@@ -1,22 +1,22 @@
 import { Routes, Route } from 'react-router-dom';
-import { Layout } from './components/layout/Layout';
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
+import { Layout } from '@/components/layout/Layout';
+import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
 
 // Application Pages
-import Forum from './pages/Forum';
-import Thread from './pages/Thread';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
-import Profile from './pages/Profile';
-import Messages from './pages/Messages';
+import Forum from '@/pages/Forum';
+import Thread from '@/pages/Thread';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import VerifyEmail from '@/pages/VerifyEmail';
+import Profile from '@/pages/Profile';
+import Messages from '@/pages/Messages';
 
 // Development Tools & Utilities
-import TestCards from './pages/TestCards';
-import FakeAddress from './pages/FakeAddress';
-import CardChecker from './pages/CardChecker';
-import BinChecker from './pages/BinChecker';
+import TestCards from '@/pages/TestCards';
+import FakeAddress from '@/pages/FakeAddress';
+import CardChecker from '@/pages/CardChecker';
+import BinChecker from '@/pages/BinChecker';
 
 export default function App() {
   return (
