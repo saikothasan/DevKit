@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 type UserRole = 'admin' | 'moderator' | 'user';
-type User = { id: number; username: string; role: UserRole; points: number; avatarUrl?: string | null } | null;
+type User = { id: number; username: string; role: UserRole; points: number; avatarUrl?: string | null; isVerified: boolean; } | null;
 
 interface AuthState {
   user: User;
@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async () => {
     try {
       const res = await fetch('/api/auth/me');
+      if (!res.ok) throw new Error('Unauthenticated');
       const data = await res.json() as { user: User };
       setUser(data.user);
     } catch {
