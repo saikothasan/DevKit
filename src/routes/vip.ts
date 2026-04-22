@@ -12,9 +12,10 @@ export const vipRouter = new Hono<{
   } 
 }>();
 
+// Lifetime access fiat equivalent configuration
 const VIP_FIAT_PRICE = 49.99;
 
-// Apirone Minor Unit Configuration Mapping
+// Apirone Minor Unit Configuration Matrix
 const CURRENCY_CONFIG: Record<string, number> = {
   'btc': 100000000,      // Satoshi
   'ltc': 100000000,      // Satoshi
@@ -24,8 +25,11 @@ const CURRENCY_CONFIG: Record<string, number> = {
   'usdc@trx': 1000000,   // Micro-USDC (TRC20)
   'eth': 1000000000000000000, // Wei
   'usdt@eth': 1000000,   // Micro-USDT (ERC20)
-  'bnb': 1000000000000000000, // Wei
 };
+
+// ==========================================
+// Invoice Initialization Vector
+// ==========================================
 
 vipRouter.post('/invoice', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
@@ -36,7 +40,7 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
     return c.json({ error: 'Unsupported blockchain protocol.' }, 400);
   }
 
-  const user = await db.select().from(users).where(eq(users.id, userPayload.id)).get();
+  const user = await db.select({ id: users.id, isVip: users.isVip }).from(users).where(eq(users.id, userPayload.id)).get();
   if (!user) return c.json({ error: 'Identity node missing.' }, 404);
   if (user.isVip) return c.json({ error: 'Node already holds VIP clearance.' }, 400);
 
@@ -49,26 +53,25 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
     if (tickerData && tickerData[currency] && tickerData[currency].usd) {
        cryptoValue = VIP_FIAT_PRICE / tickerData[currency].usd;
     } else if (tickerData && tickerData.usd) {
-       // Handle single fiat fallback structure
        cryptoValue = VIP_FIAT_PRICE / tickerData.usd;
     }
 
-    // Convert fiat equivalent into network minor units
+    // Convert fiat equivalent into precise network minor units
     const minorUnits = Math.floor(cryptoValue * CURRENCY_CONFIG[currency]);
     
     // Generate cryptographic secret for webhook validation
     const secretToken = crypto.randomUUID().replace(/-/g, '');
     const callbackUrl = `${c.env.BASE_URL}/api/vip/webhook?secret=${secretToken}`;
 
-    // 2. Transmit Invoice Payload to Apirone Processing
+    // 2. Transmit Invoice Payload to Apirone Processing Layer
     const invoicePayload = {
       amount: minorUnits,
       currency: currency,
-      lifetime: 3600,
+      lifetime: 3600, // 1 Hour validity
       "callback-url": callbackUrl,
       "user-data": {
         title: "Lifetime VIP Access",
-        merchant: "Premium Node",
+        merchant: "DevKit Elite Network",
         price: `$${VIP_FIAT_PRICE}`
       },
       linkback: `${c.env.BASE_URL}/vip`
@@ -103,7 +106,10 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
   }
 });
 
-// Apirone Asynchronous Webhook Processor
+// ==========================================
+// Asynchronous Webhook Processor
+// ==========================================
+
 vipRouter.post('/webhook', async (c) => {
   const db = drizzle(c.env.DB);
   const secret = c.req.query('secret');
@@ -135,7 +141,7 @@ vipRouter.post('/webhook', async (c) => {
 
     // Apirone dispatches 'paid' or 'completed' upon successful fund acquisition
     if (status === 'paid' || status === 'completed') {
-      const targetUser = await db.select().from(users).where(eq(users.id, tx.userId)).get();
+      const targetUser = await db.select({ isVip: users.isVip }).from(users).where(eq(users.id, tx.userId)).get();
       
       if (targetUser && !targetUser.isVip) {
         await db.update(users)
