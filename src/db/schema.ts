@@ -48,6 +48,21 @@ export const threadUnlocks = sqliteTable('thread_unlocks', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
 
+// NEW: Voting tracking to prevent exploits
+export const threadVotes = sqliteTable('thread_votes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  threadId: integer('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
+
+export const replyVotes = sqliteTable('reply_votes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  replyId: integer('reply_id').notNull().references(() => replies.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
+
 export const conversations = sqliteTable('conversations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   user1Id: integer('user1_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -72,7 +87,7 @@ export const turnstileEvents = sqliteTable('turnstile_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   ephemeralId: text('ephemeral_id').notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
-  eventType: text('event_type').notNull(), // 'signup' or 'login'
+  eventType: text('event_type').notNull(),
   ipAddress: text('ip_address'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
