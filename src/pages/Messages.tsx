@@ -132,7 +132,8 @@ export default function Messages() {
       });
       
       if (res.ok) {
-        const newMsg = await res.json();
+        // EXPLICIT TYPE CAST APPLIED HERE
+        const newMsg = await res.json() as ChatMessage;
         setMessages(prev => [...prev, newMsg]);
         setInput('');
         scrollToBottom();
