@@ -8,19 +8,23 @@ export const vipRouter = new Hono<{
   Bindings: { 
     DB: D1Database; 
     APIRONE_ACCOUNT: string; 
-    WEBHOOK_SECRET_KEY: string;
     BASE_URL: string; 
   } 
 }>();
 
 const VIP_FIAT_PRICE = 49.99;
 
-// Currencies mapping to Apirone API format and their minor unit factors
+// Apirone Minor Unit Configuration Mapping
 const CURRENCY_CONFIG: Record<string, number> = {
   'btc': 100000000,      // Satoshi
   'ltc': 100000000,      // Satoshi
+  'doge': 100000000,     // Satoshi
   'trx': 1000000,        // Sun
-  'usdt@trx': 1000000,   // Micro-USDT
+  'usdt@trx': 1000000,   // Micro-USDT (TRC20)
+  'usdc@trx': 1000000,   // Micro-USDC (TRC20)
+  'eth': 1000000000000000000, // Wei
+  'usdt@eth': 1000000,   // Micro-USDT (ERC20)
+  'bnb': 1000000000000000000, // Wei
 };
 
 vipRouter.post('/invoice', requireAuth, async (c) => {
@@ -29,30 +33,34 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
   const { currency } = await c.req.json();
 
   if (!CURRENCY_CONFIG[currency]) {
-    return c.json({ error: 'Unsupported network protocol' }, 400);
+    return c.json({ error: 'Unsupported blockchain protocol.' }, 400);
   }
 
   const user = await db.select().from(users).where(eq(users.id, userPayload.id)).get();
-  if (!user) return c.json({ error: 'Identity node missing' }, 404);
-  if (user.isVip) return c.json({ error: 'Node already holds VIP clearance' }, 400);
+  if (!user) return c.json({ error: 'Identity node missing.' }, 404);
+  if (user.isVip) return c.json({ error: 'Node already holds VIP clearance.' }, 400);
 
   try {
-    // 1. Fetch exact exchange rate from Apirone Ticker
+    // 1. Interrogate Apirone Ticker for real-time exchange rates
     const tickerRes = await fetch(`https://apirone.com/api/v2/ticker?currency=${currency}&fiat=usd`);
     const tickerData = await tickerRes.json() as any;
     
-    // Fallback calculation if rate fetch fails (assuming $1 = 1 USDT for stablecoins)
     let cryptoValue = VIP_FIAT_PRICE; 
-    if (tickerData[currency] && tickerData[currency].usd) {
+    if (tickerData && tickerData[currency] && tickerData[currency].usd) {
        cryptoValue = VIP_FIAT_PRICE / tickerData[currency].usd;
+    } else if (tickerData && tickerData.usd) {
+       // Handle single fiat fallback structure
+       cryptoValue = VIP_FIAT_PRICE / tickerData.usd;
     }
 
-    // Convert to minor units
-    const minorUnits = Math.round(cryptoValue * CURRENCY_CONFIG[currency]);
-    const secretToken = crypto.randomUUID();
+    // Convert fiat equivalent into network minor units
+    const minorUnits = Math.floor(cryptoValue * CURRENCY_CONFIG[currency]);
+    
+    // Generate cryptographic secret for webhook validation
+    const secretToken = crypto.randomUUID().replace(/-/g, '');
     const callbackUrl = `${c.env.BASE_URL}/api/vip/webhook?secret=${secretToken}`;
 
-    // 2. Generate Apirone Invoice
+    // 2. Transmit Invoice Payload to Apirone Processing
     const invoicePayload = {
       amount: minorUnits,
       currency: currency,
@@ -60,10 +68,10 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
       "callback-url": callbackUrl,
       "user-data": {
         title: "Lifetime VIP Access",
-        merchant: "Visatk Developer Hub",
+        merchant: "Premium Node",
         price: `$${VIP_FIAT_PRICE}`
       },
-      linkback: `${c.env.BASE_URL}/vip?status=pending`
+      linkback: `${c.env.BASE_URL}/vip`
     };
 
     const apironeRes = await fetch(`https://apirone.com/api/v2/accounts/${c.env.APIRONE_ACCOUNT}/invoices`, {
@@ -74,11 +82,11 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
 
     const invoiceData = await apironeRes.json() as any;
 
-    if (!invoiceData.invoice) {
-       throw new Error('Invoice generation failed at the external provider');
+    if (!invoiceData.invoice || !invoiceData['invoice-url']) {
+       return c.json({ error: 'Invoice initialization failed at external provider.' }, 500);
     }
 
-    // 3. Register pending transaction in ledger
+    // 3. Register transaction vector to D1 Ledger
     await db.insert(payments).values({
       userId: user.id,
       invoiceId: invoiceData.invoice,
@@ -91,11 +99,11 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
 
     return c.json({ success: true, invoiceUrl: invoiceData['invoice-url'] });
   } catch (err) {
-    return c.json({ error: 'Transaction pipeline disrupted' }, 500);
+    return c.json({ error: 'Systemic failure during payload construction.' }, 500);
   }
 });
 
-// Security: Public Webhook listening for Apirone asynchronous callbacks
+// Apirone Asynchronous Webhook Processor
 vipRouter.post('/webhook', async (c) => {
   const db = drizzle(c.env.DB);
   const secret = c.req.query('secret');
@@ -104,32 +112,41 @@ vipRouter.post('/webhook', async (c) => {
     const body = await c.req.json();
     const { invoice, status } = body;
 
-    if (!invoice || !status || !secret) {
-      return c.json({ error: 'Malformed payload' }, 400);
+    if (!invoice || !status) {
+      return c.text('Malformed payload parameters', 400);
     }
 
+    // Retrieve ledger record
     const tx = await db.select().from(payments).where(eq(payments.invoiceId, invoice)).get();
     
-    // Security verification using the injected secret token
-    if (!tx || tx.secretToken !== secret) {
-      return c.json({ error: 'Cryptographic validation failed' }, 403);
+    if (!tx) {
+      return c.text('Invoice identifier not located', 404);
     }
 
-    // Update transaction status
+    // Cryptographic validation of the secret token
+    if (tx.secretToken !== secret) {
+      return c.text('Cryptographic signature validation failed', 403);
+    }
+
+    // Execute state transition on ledger
     await db.update(payments)
       .set({ status: status, updatedAt: sql`(strftime('%s', 'now'))` })
       .where(eq(payments.id, tx.id));
 
-    // Apirone sends 'paid' when exact amount matches, or 'completed' when block is confirmed
+    // Apirone dispatches 'paid' or 'completed' upon successful fund acquisition
     if (status === 'paid' || status === 'completed') {
-      await db.update(users)
-        .set({ isVip: true, vipSince: sql`(strftime('%s', 'now'))` })
-        .where(eq(users.id, tx.userId));
+      const targetUser = await db.select().from(users).where(eq(users.id, tx.userId)).get();
+      
+      if (targetUser && !targetUser.isVip) {
+        await db.update(users)
+          .set({ isVip: true, vipSince: sql`(strftime('%s', 'now'))` })
+          .where(eq(users.id, tx.userId));
+      }
     }
 
-    // Return strictly *ok* in plain text to stop Apirone from retrying
+    // Apirone mandates a strict '*ok*' plain text response to acknowledge receipt
     return c.text('*ok*', 200);
   } catch (err) {
-    return c.json({ error: 'Webhook processing fault' }, 500);
+    return c.text('Internal execution fault', 500);
   }
 });
