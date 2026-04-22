@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash } from 'lucide-react';
+import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SeoHead } from '../components/SeoHead';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,21 +16,16 @@ const formatCategory = (cat: string) => {
 };
 
 type Thread = {
-  id: number;
-  title: string;
-  category: string;
-  author: string;
-  upvotes: number;
-  views: number;
-  isPinned: boolean;
-  isLocked: boolean;
-  hasLockedContent: boolean;
-  createdAt: string;
+  id: number; title: string; category: string; author: string; upvotes: number;
+  views: number; isPinned: boolean; isLocked: boolean; hasLockedContent: boolean; createdAt: string;
 };
+
+type PaginationMeta = { page: number; limit: number; total: number; totalPages: number; };
 
 export default function Forum() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 15, total: 0, totalPages: 1 });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -38,25 +33,26 @@ export default function Forum() {
   const [isPosting, setIsPosting] = useState(false);
   const [newThread, setNewThread] = useState({ title: '', content: '', category: 'general', lockedContent: '', unlockCost: 0 });
 
-  const fetchThreads = useCallback(() => {
+  const fetchThreads = useCallback((pageToFetch = 1) => {
     setIsLoading(true);
     const params = new URLSearchParams();
     if (searchQuery) params.append('q', searchQuery);
     if (activeCategory !== 'all') params.append('category', activeCategory);
+    params.append('page', pageToFetch.toString());
+    params.append('limit', '15');
 
     fetch(`/api/forum/threads?${params.toString()}`)
-      .then(res => res.json() as Promise<{data: Thread[], meta: any}>)
+      .then(res => res.json() as Promise<{data: Thread[], meta: PaginationMeta}>)
       .then(response => { 
-        // Handle pagination response structure
-        const threadData = Array.isArray(response) ? response : (response.data || []);
-        setThreads(threadData); 
+        setThreads(response.data || []);
+        if (response.meta) setMeta(response.meta);
         setIsLoading(false); 
       })
       .catch(console.error);
   }, [searchQuery, activeCategory]);
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => { fetchThreads(); }, 300);
+    const delayDebounceFn = setTimeout(() => { fetchThreads(1); }, 300);
     return () => clearTimeout(delayDebounceFn);
   }, [fetchThreads]);
 
@@ -72,7 +68,7 @@ export default function Forum() {
     });
     setNewThread({ title: '', content: '', category: 'general', lockedContent: '', unlockCost: 0 });
     setIsPosting(false);
-    fetchThreads();
+    fetchThreads(1);
   };
 
   return (
@@ -91,10 +87,7 @@ export default function Forum() {
         <div className="w-full md:w-96 relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
           <input 
-            type="text" 
-            placeholder="Search discussions..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            type="text" placeholder="Search discussions..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-sm"
           />
         </div>
@@ -104,15 +97,7 @@ export default function Forum() {
         <div className="w-full lg:col-span-8 space-y-6">
           <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
             {CATEGORIES.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${
-                  activeCategory === cat 
-                    ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 shadow-md' 
-                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800 dark:hover:bg-zinc-800'
-                }`}
-              >
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${activeCategory === cat ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 shadow-md' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800 dark:hover:bg-zinc-800'}`}>
                 {formatCategory(cat)}
               </button>
             ))}
@@ -120,53 +105,53 @@ export default function Forum() {
 
           <div className="space-y-4">
             {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl animate-pulse"></div>
-              ))
+              Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl animate-pulse"></div>)
             ) : threads.length === 0 ? (
               <div className="p-16 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl text-zinc-500 border-dashed shadow-sm">
-                <div className="mx-auto size-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
-                  <MessageCircle className="size-8 text-zinc-400" />
-                </div>
+                <div className="mx-auto size-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4"><MessageCircle className="size-8 text-zinc-400" /></div>
                 <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">No discussions found</h3>
                 <p className="text-sm">Try adjusting the search query or selecting a different category.</p>
               </div>
             ) : (
-              threads.map(thread => (
-                <Link 
-                  key={thread.id} 
-                  to={`/forum/${thread.id}`}
-                  className={`group flex flex-col sm:flex-row gap-4 p-6 bg-white dark:bg-zinc-900 border rounded-2xl transition-all ${
-                    thread.isPinned ? 'border-orange-500/50 bg-orange-50/50 dark:bg-orange-500/10 shadow-sm' : 'border-zinc-200 dark:border-zinc-800 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2.5 mb-3">
-                      {thread.isPinned && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400"><Pin className="size-3" /> Pinned</span>}
-                      {thread.isLocked && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500"><LockKeyhole className="size-3" /> Locked</span>}
-                      {thread.hasLockedContent && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400"><LockKeyhole className="size-3" /> Premium</span>}
-                      
-                      <span className="px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-[10px] font-bold uppercase tracking-wider rounded-md">
-                        {formatCategory(thread.category)}
-                      </span>
-                      <span className="text-xs text-zinc-500 font-medium">{new Date(thread.createdAt).toLocaleDateString()}</span>
+              <>
+                {threads.map(thread => (
+                  <Link key={thread.id} to={`/forum/${thread.id}`} className={`group flex flex-col sm:flex-row gap-4 p-6 bg-white dark:bg-zinc-900 border rounded-2xl transition-all ${thread.isPinned ? 'border-orange-500/50 bg-orange-50/50 dark:bg-orange-500/10 shadow-sm' : 'border-zinc-200 dark:border-zinc-800 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5'}`}>
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                        {thread.isPinned && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400"><Pin className="size-3" /> Pinned</span>}
+                        {thread.isLocked && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500"><LockKeyhole className="size-3" /> Locked</span>}
+                        {thread.hasLockedContent && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400"><LockKeyhole className="size-3" /> Premium</span>}
+                        
+                        <span className="px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-[10px] font-bold uppercase tracking-wider rounded-md">
+                          {formatCategory(thread.category)}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-medium">{new Date(thread.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <h3 className="font-bold text-lg md:text-xl text-zinc-900 dark:text-zinc-100 mb-3 group-hover:text-orange-500 transition-colors line-clamp-2 leading-snug">{thread.title}</h3>
+                      <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md truncate max-w-[150px]"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> {thread.author}</span>
+                      </div>
                     </div>
-                    <h3 className="font-bold text-lg md:text-xl text-zinc-900 dark:text-zinc-100 mb-3 group-hover:text-orange-500 transition-colors line-clamp-2 leading-snug">{thread.title}</h3>
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md truncate max-w-[150px]"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> {thread.author}</span>
+                    
+                    <div className="flex sm:flex-col justify-end sm:justify-center items-center gap-4 sm:gap-3 border-t sm:border-t-0 sm:border-l border-zinc-100 dark:border-zinc-800 pt-4 sm:pt-0 sm:pl-6 shrink-0 min-w-[80px]">
+                      <div className="flex items-center gap-2 text-orange-500 font-bold bg-orange-500/10 px-3 py-1.5 rounded-lg"><Flame className="size-4" /> {thread.upvotes}</div>
+                      <div className="flex items-center gap-2 text-zinc-500 font-bold bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-lg"><Eye className="size-4" /> {thread.views}</div>
                     </div>
+                  </Link>
+                ))}
+
+                {meta.totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 pt-6">
+                    <button onClick={() => fetchThreads(meta.page - 1)} disabled={meta.page === 1} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors">
+                      <ChevronLeft className="size-5 text-zinc-900 dark:text-white" />
+                    </button>
+                    <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Page {meta.page} of {meta.totalPages}</span>
+                    <button onClick={() => fetchThreads(meta.page + 1)} disabled={meta.page === meta.totalPages} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors">
+                      <ChevronRight className="size-5 text-zinc-900 dark:text-white" />
+                    </button>
                   </div>
-                  
-                  <div className="flex sm:flex-col justify-end sm:justify-center items-center gap-4 sm:gap-3 border-t sm:border-t-0 sm:border-l border-zinc-100 dark:border-zinc-800 pt-4 sm:pt-0 sm:pl-6 shrink-0 min-w-[80px]">
-                    <div className="flex items-center gap-2 text-orange-500 font-bold bg-orange-500/10 px-3 py-1.5 rounded-lg" title="Upvotes">
-                      <Flame className="size-4" /> {thread.upvotes}
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-500 font-bold bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-lg" title="Views">
-                      <Eye className="size-4" /> {thread.views}
-                    </div>
-                  </div>
-                </Link>
-              ))
+                )}
+              </>
             )}
           </div>
         </div>
