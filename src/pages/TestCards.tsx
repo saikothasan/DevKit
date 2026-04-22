@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { SeoHead } from '../components/SeoHead';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { SeoHead } from '@/components/SeoHead';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Copy, Check, Sparkles, Database, ShieldAlert, Code2, FileJson, FileText, CreditCard, Network, AlertCircle, Shield, Cpu, RefreshCw, HelpCircle } from 'lucide-react';
 
 const PRESET_BINS = [
@@ -75,7 +75,7 @@ export default function TestCards() {
   return (
     <div className="max-w-5xl mx-auto md:py-8 animation-fade-in">
       <SeoHead 
-        title="Test Credit Card Generator | Luhn Valid CC Numbers" 
+        title="Credit Card Generator | Luhn Valid CC Numbers" 
         description="Generate 100% structurally valid, Luhn-compliant dummy credit card payloads. Output clean testing data for Visa, Mastercard, Amex, and Discover in JSON or CSV." 
         keywords="test credit card generator, valid cc generator with cvv, dummy credit card numbers, Luhn algorithm generator, QA testing cards, test payment vectors"
         isTool={true}
@@ -84,9 +84,9 @@ export default function TestCards() {
       
       <div className="mb-8 md:mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4 shadow-sm">
-          <Database className="size-3.5 fill-current" /> Structurally Valid QA Payload
+          <Database className="size-3.5 fill-current" /> CC Generator
         </div>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Enterprise Test Card Generator</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Valid Card Generator</h1>
         <p className="text-lg text-zinc-500 dark:text-zinc-400">Instantly synthesize mathematically valid dummy payment vectors utilizing precise network length constraints and cryptographic Luhn checks.</p>
         
         <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-500/10 inline-flex px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-500/20">
@@ -98,7 +98,7 @@ export default function TestCards() {
         
         <div className="p-6 md:p-8 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#0a0a0a]/50">
           <div className="flex flex-wrap items-center gap-2 mb-6">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider mr-2">Gateway Presets</span>
+            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider mr-2">Presets</span>
             {PRESET_BINS.map((preset) => (
               <button key={preset.name} onClick={() => setBin(preset.bin)} className="px-4 py-1.5 rounded-xl text-xs font-bold transition-all bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-500 shadow-sm">
                 {preset.name}
@@ -121,7 +121,7 @@ export default function TestCards() {
             <div className="md:col-span-4">
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Volume Size</label>
               <select value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-full bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-4 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-sm appearance-none cursor-pointer">
-                <option value={1}>1 Vector</option><option value={10}>10 Vectors</option><option value={50}>50 Vectors</option><option value={100}>100 Vectors</option><option value={500}>500 Vectors (Bulk)</option>
+                <option value={10}>10 Cards</option><option value={20}>20 Cards</option><option value={50}>50 Cards</option><option value={100}>100 Cards</option><option value={500}>500 Cards (Bulk)</option>
               </select>
             </div>
             

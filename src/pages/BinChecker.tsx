@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { SeoHead } from '../components/SeoHead';
+import { SeoHead } from '@/components/SeoHead';
 import { Square, CreditCard, Activity, Trash2, Search, Database, Info, ShieldCheck, Globe } from 'lucide-react';
 
 type CheckStatus = 'Found' | 'Not Found' | 'Error';
@@ -96,7 +96,7 @@ export default function BinChecker() {
   return (
     <div className="max-w-6xl mx-auto md:py-8 animation-fade-in">
       <SeoHead 
-        title="BIN Checker & Credit Card BIN Lookup API Tool" 
+        title="BIN Checker & Credit Card BIN Lookup Tool" 
         description="Free real-time Bank Identification Number (BIN) lookup tool. Verify credit card BIN codes to identify issuing banks, card schemes, and geographical origins for fraud prevention." 
         keywords="BIN checker, BIN lookup, bank identification number, credit card BIN lookup, IIN lookup, issuer identification number, card scheme detection, payment validation"
         isTool={true}
@@ -105,9 +105,9 @@ export default function BinChecker() {
       
       <div className="mb-8 md:mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4 shadow-sm">
-          <Database className="size-3.5 fill-current" /> Metadata API Integration
+          <Database className="size-3.5 fill-current" /> Metadata
         </div>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Credit Card BIN Lookup Engine</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Credit Card BIN Lookup</h1>
         <p className="text-lg text-zinc-500 dark:text-zinc-400">Query global issuer networks to instantly identify card brands, ranges, and geographic origin.</p>
       </div>
 

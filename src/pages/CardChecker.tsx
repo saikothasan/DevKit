@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { SeoHead } from '../components/SeoHead';
+import { SeoHead } from '@/components/SeoHead';
 import { Square, Activity, Trash2, Zap, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
 interface CheckResult {
@@ -87,14 +87,14 @@ export default function CardChecker() {
   return (
     <div className="max-w-6xl mx-auto md:py-8 animation-fade-in">
       <SeoHead 
-        title="Payment Vector Gateway Validator" 
-        description="Verify structural formatting and perform mock gateway authorization sequences." 
+        title="CC Checker - Live CVV CC Checker" 
+        description="CC Checker With Live Auth Gates. Live CVV, Live Card Checker." 
         isTool={true}
       />
       
       <div className="mb-8 md:mb-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Gateway Authorization Checker</h1>
-        <p className="text-lg text-zinc-500 dark:text-zinc-400">Execute structured payload validation across external endpoints with native BIN resolution.</p>
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Auth Gateway Checker</h1>
+        <p className="text-lg text-zinc-500 dark:text-zinc-400">Bulk Live CC Checker with native BIN resolution.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-16">
@@ -102,7 +102,7 @@ export default function CardChecker() {
           <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 overflow-hidden flex flex-col h-[500px]">
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#0a0a0a]/50 flex items-center justify-between">
               <label className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                Target Vectors
+                Start Checking
               </label>
               <button onClick={() => setInput('')} disabled={isChecking || !input} className="text-zinc-400 hover:text-red-500 disabled:opacity-50 transition-colors cursor-pointer">
                 <Trash2 className="size-4" />

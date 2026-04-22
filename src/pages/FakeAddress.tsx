@@ -294,7 +294,7 @@ export default function FakeAddress() {
           
           <div className="flex items-center gap-4 mb-4">
             <span className="text-4xl filter drop-shadow-md">{activeLocaleData?.flag}</span>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{activeLocaleData?.name} Identity Vector</h1>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{activeLocaleData?.name} fake address</h1>
           </div>
           <p className="text-lg text-zinc-500 dark:text-zinc-400 max-w-2xl">Instantly generate structurally valid identity payloads, financial traces, and digital footprints localized explicitly for {activeLocaleData?.name}.</p>
         </div>
@@ -413,7 +413,7 @@ export default function FakeAddress() {
           </button>
           <button onClick={() => copy(formattedOutput)} disabled={!identity || isGenerating} className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 text-base font-bold rounded-2xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${copiedText ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white dark:bg-[#0a0a0a] text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm'}`}>
             {copiedText ? <Check className="size-5" /> : <Copy className="size-5" />}
-            {copiedText ? 'Vector Copied Successfully' : 'Copy Full Vector payload'}
+            {copiedText ? 'Copied Successfully' : 'Copy Full'}
           </button>
         </div>
       </div>
