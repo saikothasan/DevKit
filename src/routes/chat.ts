@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq, or, and, desc, not } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { users, conversations, messages } from '../db/schema';
+import { users, conversations, messages } from '@/db/schema';
 import { requireAuth } from './auth';
 
 export const chatRouter = new Hono<{ Bindings: any, Variables: any }>();
