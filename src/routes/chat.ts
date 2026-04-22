@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, or, and, desc, not } from 'drizzle-orm';
+import { eq, or, and, desc, not, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { users, conversations, messages } from '@/db/schema';
@@ -57,7 +57,6 @@ chatRouter.get('/messages/:id', requireAuth, async (c) => {
   const user = c.get('user');
   const conversationId = parseInt(c.req.param('id'));
   
-  // Security Layer: Verify the user is a participant in this conversation
   const conv = await db.select().from(conversations).where(eq(conversations.id, conversationId)).get();
   if (!conv || (conv.user1Id !== user.id && conv.user2Id !== user.id)) {
     return c.json({ error: 'Unauthorized Access' }, 403);
@@ -75,23 +74,44 @@ chatRouter.get('/directory', requireAuth, async (c) => {
   return c.json(directory);
 });
 
-// 5. WebSocket Upgrade Pipeline routing to Durable Object
-chatRouter.get('/ws', requireAuth, async (c) => {
-  const conversationId = c.req.query('conversationId');
-  if (!conversationId) return c.text('Missing routing constraint', 400);
+// 5. REST Pipeline for Transmission (Replaces DO WebSocket)
+const sendMessageSchema = z.object({
+  content: z.string().optional(),
+  fileUrl: z.string().nullable().optional(),
+  fileName: z.string().nullable().optional(),
+  fileType: z.string().nullable().optional()
+});
 
+chatRouter.post('/messages/:id', requireAuth, zValidator('json', sendMessageSchema), async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  
-  // Security Layer: Stop unauthorized WebSocket upgrades
-  const conv = await db.select().from(conversations).where(eq(conversations.id, parseInt(conversationId))).get();
+  const conversationId = parseInt(c.req.param('id'));
+  const payload = c.req.valid('json');
+
+  const conv = await db.select().from(conversations).where(eq(conversations.id, conversationId)).get();
   if (!conv || (conv.user1Id !== user.id && conv.user2Id !== user.id)) {
-    return new Response('Unauthorized Web Socket Access', { status: 403 });
+    return c.json({ error: 'Unauthorized Access' }, 403);
   }
 
-  // Bind and delegate Request to Durable Object using the conversationId as the isolated namespace
-  const id = c.env.LiveSession.idFromName(conversationId);
-  const stub = c.env.LiveSession.get(id);
-  
-  return stub.fetch(c.req.raw);
+  try {
+    const inserted = await db.insert(messages).values({
+      conversationId,
+      senderId: user.id,
+      content: payload.content || '',
+      fileUrl: payload.fileUrl || null,
+      fileName: payload.fileName || null,
+      fileType: payload.fileType || null
+    }).returning();
+
+    c.executionCtx.waitUntil(
+      db.update(conversations)
+        .set({ lastMessageAt: sql`(strftime('%s', 'now'))` })
+        .where(eq(conversations.id, conversationId))
+        .execute()
+    );
+
+    return c.json(inserted[0]);
+  } catch (err) {
+    return c.json({ error: 'Transmission execution failed' }, 500);
+  }
 });
