@@ -1,9 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { User, Calendar, MessageSquarePlus, MessageCircle, Flame, Camera, Loader2, AlertCircle, Shield, ShieldAlert, Network, Share2, CheckCircle2 } from 'lucide-react';
-import { SeoHead } from '../components/SeoHead';
-import { useAuth } from '../context/AuthContext';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { SeoHead } from '@/components/SeoHead';
+import { useAuth } from '@/context/AuthContext';
 
 type ProfileData = {
   user: { id: number; username: string; points: number; avatarUrl: string | null; createdAt: string; role: string; isVerified?: boolean; };
@@ -21,8 +20,8 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   
-  const [copiedText, copy] = useCopyToClipboard();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isOwnProfile = currentUser?.username === username;
@@ -42,6 +41,12 @@ export default function Profile() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [username]);
+
+  const handleCopyVector = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,7 +125,7 @@ export default function Profile() {
           <User className="size-16 mx-auto mb-4 opacity-20" />
           <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Identity Unresolved</h2>
           <p className="text-sm">The requested target node does not exist in the database hierarchy.</p>
-          <Link to="/" className="mt-6 px-6 py-2.5 bg-zinc-900 hover:bg-orange-500 text-white rounded-xl font-bold transition-colors">Return to Hub</Link>
+          <Link to="/" className="mt-6 px-6 py-2.5 bg-zinc-900 hover:bg-orange-500 text-white rounded-xl font-bold transition-colors">Return</Link>
         </div>
       </div>
     );
@@ -132,7 +137,7 @@ export default function Profile() {
 
   return (
     <div className="max-w-4xl mx-auto md:py-8 animation-fade-in">
-      <SeoHead title={`${profile.user.username}'s Matrix`} description={`Target analytics for ${profile.user.username}.`} />
+      <SeoHead title={`${profile.user.username}'s Profile`} description={`User Profile analytics for ${profile.user.username}.`} />
       
       {uploadError && (
         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl flex items-center gap-3 text-sm font-semibold shadow-sm">
@@ -145,11 +150,11 @@ export default function Profile() {
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-orange-500 to-amber-400"></div>
         <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2">
            <button 
-             onClick={() => copy(window.location.href)}
+             onClick={handleCopyVector}
              className="p-2.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-[#0a0a0a] dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-orange-500 rounded-xl transition-all shadow-sm"
-             title="Copy Vector Link"
+             title="Copy Link"
            >
-             {copiedText ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Share2 className="size-4" />}
+             {isCopied ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Share2 className="size-4" />}
            </button>
         </div>
         
@@ -190,7 +195,7 @@ export default function Profile() {
             </div>
             
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6">
-              <span className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800"><Calendar className="size-3.5" /> Node Est. {new Date(profile.user.createdAt).toLocaleDateString()}</span>
+              <span className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800"><Calendar className="size-3.5" /> Est. {new Date(profile.user.createdAt).toLocaleDateString()}</span>
               {profile.user.isVerified && <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/20"><CheckCircle2 className="size-3.5" /> Verified</span>}
             </div>
 
@@ -232,7 +237,7 @@ export default function Profile() {
       {/* Activity Logs */}
       <h3 className="font-extrabold text-xl md:text-2xl mb-6 flex items-center gap-3 text-zinc-900 dark:text-white px-2">
         <MessageSquarePlus className="size-6 text-orange-500" /> 
-        Origin Vectors
+        Origin
       </h3>
       
       <div className="space-y-4 mb-12">
