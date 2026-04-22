@@ -38,7 +38,7 @@ export default function App() {
               <Route path="vip" element={<VIPPlan />} />
               
               <Route path="test-cards" element={<TestCards />} />
-							<Route path="ip" element={<IpCheck />} />
+			  <Route path="ip" element={<IpCheck />} />
               <Route path="fake-address" element={<FakeAddress />} />
               <Route path="fake-address/:locale" element={<FakeAddress />} />
               <Route path="card-checker" element={<CardChecker />} />
