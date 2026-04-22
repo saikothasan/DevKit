@@ -93,7 +93,7 @@ export const threadVotes = sqliteTable('thread_votes', {
   voteType: integer('vote_type').notNull(), 
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 }, (t) => ({
-  pk: primaryKey(t.threadId, t.userId),
+  pk: primaryKey({ columns: [t.threadId, t.userId] }),
 }));
 
 export const replyVotes = sqliteTable('reply_votes', {
@@ -102,7 +102,7 @@ export const replyVotes = sqliteTable('reply_votes', {
   voteType: integer('vote_type').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 }, (t) => ({
-  pk: primaryKey(t.replyId, t.userId),
+  pk: primaryKey({ columns: [t.replyId, t.userId] }),
 }));
 
 // ==========================================
@@ -137,3 +137,66 @@ export const turnstileEvents = sqliteTable('turnstile_events', {
   ipAddress: text('ip_address'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 });
+
+// ==========================================
+// 6. ORM Relations Configurations
+// ==========================================
+
+export const usersRelations = relations(users, ({ many }) => ({
+  threads: many(threads),
+  replies: many(replies),
+  payments: many(payments),
+  sentMessages: many(messages),
+}));
+
+export const threadsRelations = relations(threads, ({ one, many }) => ({
+  authorNode: one(users, {
+    fields: [threads.authorId],
+    references: [users.id],
+  }),
+  replies: many(replies),
+  unlocks: many(threadUnlocks),
+}));
+
+export const repliesRelations = relations(replies, ({ one }) => ({
+  thread: one(threads, {
+    fields: [replies.threadId],
+    references: [threads.id],
+  }),
+  authorNode: one(users, {
+    fields: [replies.authorId],
+    references: [users.id],
+  }),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  userNode: one(users, {
+    fields: [payments.userId],
+    references: [users.id],
+  }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user1Node: one(users, {
+    fields: [conversations.user1Id],
+    references: [users.id],
+    relationName: 'user1Conversations'
+  }),
+  user2Node: one(users, {
+    fields: [conversations.user2Id],
+    references: [users.id],
+    relationName: 'user2Conversations'
+  }),
+  messages: many(messages)
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id]
+  }),
+  senderNode: one(users, {
+    fields: [messages.senderId],
+    references: [users.id]
+  })
+}));
