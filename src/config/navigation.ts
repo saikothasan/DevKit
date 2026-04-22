@@ -24,11 +24,11 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/bin-checker', icon: CreditCard, label: 'BIN Lookup', group: 'Utilities' },
   { to: '/test-cards', icon: Terminal, label: 'Vector Gen', group: 'Utilities' },
   { to: '/fake-address', icon: MapPin, label: 'Mock Identity', group: 'Utilities' },
-  { to: '/temp-number', icon: Mail, label: 'Temp Number', group: 'Utilities' },
+  { to: '/ip', icon: Mail, label: 'IP Check', group: 'Utilities' },
   
   // Community & Communications Layer
   { to: '/', icon: MessageSquare, label: 'Discussion Board', group: 'Community' },
-  { to: '/messages', icon: Network, label: 'Secure Comm-Link', group: 'Community', badge: 'LIVE' },
+  { to: '/messages', icon: Network, label: 'Live Chat', group: 'Community', badge: 'LIVE' },
   
   // External Endpoints
   { to: 'https://t.me/drkingbd', icon: Send, label: 'Telegram Channel', group: 'Community', external: true }
