@@ -4,10 +4,9 @@ import { SeoHead } from '@/components/SeoHead';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { 
   Copy, Check, MapPin, UserSquare2, Globe, Loader2, ArrowLeft,
-  Briefcase, Wifi, Database, FileCode2, Shield, ChevronRight, RefreshCw, MousePointerClick
+  Briefcase, WalletCards, Database, FileCode2, Shield, ChevronRight, 
+  RefreshCw, MousePointerClick, Cpu, Plane
 } from 'lucide-react';
-
-// Static import strictly enforcing synchronous loading without dynamic imports
 import { allFakers } from '@faker-js/faker';
 
 const getFlagEmoji = (cc: string) => {
@@ -81,7 +80,9 @@ type Identity = {
   jobTitle: string; department: string; company: string;
   street: string; secondaryAddress: string; city: string; state: string; zip: string; country: string; coordinates: string; timezone: string;
   email: string; username: string; password: string; ipAddress: string; macAddress: string; userAgent: string;
-  creditCard: string; cvv: string; ccIssuer: string; iban: string; cryptoAddress: string;
+  networkInterface: string; commitSha: string;
+  creditCard: string; cvv: string; ccIssuer: string; iban: string; cryptoAddress: string; ethereumAddress: string;
+  recordLocator: string; currency: string;
 };
 
 const FAQ_DATA = [
@@ -185,12 +186,20 @@ export default function FakeAddress() {
           ipAddress: safeCall(() => faker.internet.ipv4()),
           macAddress: safeCall(() => faker.internet.mac()),
           userAgent: safeCall(() => faker.internet.userAgent()),
+          networkInterface: safeCall(() => faker.system.networkInterface()),
+          commitSha: safeCall(() => faker.git.commitSha({ length: 7 })),
 
+          currency: safeCall(() => {
+            const c = faker.finance.currency();
+            return `${c.name} (${c.symbol})`;
+          }),
           creditCard: safeCall(() => faker.finance.creditCardNumber()),
           cvv: safeCall(() => faker.finance.creditCardCVV()),
           ccIssuer: safeCall(() => faker.finance.creditCardIssuer()),
           iban: safeCall(() => faker.finance.iban()),
-          cryptoAddress: safeCall(() => faker.finance.bitcoinAddress())
+          cryptoAddress: safeCall(() => faker.finance.bitcoinAddress()),
+          ethereumAddress: safeCall(() => faker.finance.ethereumAddress()),
+          recordLocator: safeCall(() => faker.airline.recordLocator())
         });
       } finally {
         setIsGenerating(false);
@@ -198,14 +207,12 @@ export default function FakeAddress() {
     }, 200);
   }, [activeLocaleData, isGenerating]);
 
-  // Handle incorrect locale routes
   useEffect(() => {
     if (locale && !SUPPORTED_LOCALES[locale]) {
       navigate('/fake-address', { replace: true });
     }
   }, [locale, navigate]);
 
-  // Auto-generate on initial load of a valid locale
   useEffect(() => {
     if (activeLocaleData && !identity && !isGenerating && !initialLoadComplete) {
       setInitialLoadComplete(true);
@@ -214,7 +221,7 @@ export default function FakeAddress() {
   }, [activeLocaleData, identity, isGenerating, initialLoadComplete, generateIdentity]);
 
   const formattedOutput = identity ? 
-    `[Personal Profile]\nName: ${identity.fullName}\nGender: ${identity.gender}\nDOB: ${identity.dateOfBirth}\nPhone: ${identity.phone}\nID: ${identity.idNumber}\nUUID: ${identity.uuid}\n\n[Professional]\nJob Title: ${identity.jobTitle}\nDepartment: ${identity.department}\nCompany: ${identity.company}\n\n[Location]\nAddress: ${identity.street}, ${identity.secondaryAddress}\nCity/State: ${identity.city}, ${identity.state}\nZip Code: ${identity.zip}\nCountry: ${identity.country}\nTimezone: ${identity.timezone}\nGeo: ${identity.coordinates}\n\n[Digital Footprint]\nEmail: ${identity.email}\nUsername: ${identity.username}\nPassword: ${identity.password}\nIP: ${identity.ipAddress}\nMAC: ${identity.macAddress}\nUser-Agent: ${identity.userAgent}\n\n[Financial Vector]\nCard: ${identity.ccIssuer} - ${identity.creditCard} (CVV: ${identity.cvv})\nIBAN: ${identity.iban}\nBTC Address: ${identity.cryptoAddress}` : '';
+    `[Personal Profile]\nName: ${identity.fullName}\nGender: ${identity.gender}\nDOB: ${identity.dateOfBirth}\nPhone: ${identity.phone}\nID: ${identity.idNumber}\nUUID: ${identity.uuid}\n\n[Professional]\nJob Title: ${identity.jobTitle}\nDepartment: ${identity.department}\nCompany: ${identity.company}\n\n[Location]\nAddress: ${identity.street}, ${identity.secondaryAddress}\nCity/State: ${identity.city}, ${identity.state}\nZip Code: ${identity.zip}\nCountry: ${identity.country}\nTimezone: ${identity.timezone}\nGeo: ${identity.coordinates}\n\n[Digital Footprint]\nEmail: ${identity.email}\nUsername: ${identity.username}\nPassword: ${identity.password}\nIP: ${identity.ipAddress}\nMAC: ${identity.macAddress}\nUser-Agent: ${identity.userAgent}\nNetwork Int: ${identity.networkInterface}\nCommit SHA: ${identity.commitSha}\n\n[Financial & Travel Vector]\nCurrency: ${identity.currency}\nCard: ${identity.ccIssuer} - ${identity.creditCard} (CVV: ${identity.cvv})\nIBAN: ${identity.iban}\nBTC Address: ${identity.cryptoAddress}\nETH Address: ${identity.ethereumAddress}\nRecord Locator: ${identity.recordLocator}` : '';
 
   if (!locale) {
     const groupedLocales = Object.entries(SUPPORTED_LOCALES).reduce((acc, [slug, data]) => {
@@ -235,7 +242,7 @@ export default function FakeAddress() {
         
         <div className="mb-12 text-center max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-6 shadow-sm">
-            <Globe className="size-3.5 fill-current" /> Global Identity Engine
+            <Globe className="size-3.5 fill-current" /> Address Generator
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Select Localization Profile</h1>
           <p className="text-lg text-zinc-500 dark:text-zinc-400">Choose a specific region to dynamically generate culturally accurate mock identities and mathematically valid regional footprints.</p>
@@ -270,9 +277,9 @@ export default function FakeAddress() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto md:py-8 animation-fade-in">
+    <div className="max-w-[1400px] mx-auto md:py-8 animation-fade-in">
       <SeoHead 
-        title={`${activeLocaleData?.name} Fake Address Generator | Mock Identity API`}
+        title={`${activeLocaleData?.name} Fake Address Generator | Mock Identity`}
         description={`Generate localized fake addresses, random names, and dummy profiles specifically for ${activeLocaleData?.name}. High-fidelity mock identity vectors for QA testing.`}
         keywords={`fake address generator ${activeLocaleData?.name}, random address ${activeLocaleData?.name}, mock identity ${activeLocaleData?.name}, dummy data ${activeLocaleData?.name}`}
         isTool={true}
@@ -306,10 +313,10 @@ export default function FakeAddress() {
         )}
 
         {identity ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             
             {/* Column 1: Personal Data */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex flex-col">
               <SectionTitle icon={UserSquare2} title="Personal Profile" />
               <div className="flex items-center gap-4 mb-5 p-3 -mx-3 rounded-xl">
                 <img src={identity.avatar} alt="Avatar" className="size-14 rounded-full bg-zinc-200 dark:bg-zinc-800 object-cover shadow-sm ring-2 ring-white dark:ring-zinc-900" />
@@ -327,7 +334,7 @@ export default function FakeAddress() {
             </div>
 
             {/* Column 2: Professional & Location */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex flex-col">
               <SectionTitle icon={Briefcase} title="Professional & Locale" />
               <InteractiveDataField label="Job Title" value={identity.jobTitle} />
               <div className="grid grid-cols-2 gap-x-4">
@@ -346,9 +353,9 @@ export default function FakeAddress() {
               <InteractiveDataField label="Geo Coordinates" value={identity.coordinates} mono />
             </div>
 
-            {/* Column 3: Digital & Financial */}
-            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm md:col-span-2 lg:col-span-1">
-              <SectionTitle icon={Wifi} title="Digital & Financial" />
+            {/* Column 3: Digital Footprint */}
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex flex-col">
+              <SectionTitle icon={Cpu} title="Digital Footprint" />
               <InteractiveDataField label="Email Address" value={identity.email} />
               <div className="grid grid-cols-2 gap-x-4">
                 <InteractiveDataField label="Username" value={identity.username} mono />
@@ -358,15 +365,33 @@ export default function FakeAddress() {
                 <InteractiveDataField label="IP Address" value={identity.ipAddress} mono />
                 <InteractiveDataField label="MAC Address" value={identity.macAddress} mono />
               </div>
-              
-              <div className="my-3 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
-              
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Network Interface" value={identity.networkInterface} mono />
+                <InteractiveDataField label="Commit SHA" value={identity.commitSha} mono />
+              </div>
+              <InteractiveDataField label="User-Agent Payload" value={identity.userAgent} mono />
+            </div>
+
+            {/* Column 4: Financial & Travel */}
+            <div className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex flex-col">
+              <SectionTitle icon={WalletCards} title="Financial & Travel" />
               <InteractiveDataField label="Credit Card" value={`${identity.ccIssuer} - ${identity.creditCard}`} mono />
               <div className="grid grid-cols-2 gap-x-4">
                 <InteractiveDataField label="CVV" value={identity.cvv} mono />
-                <InteractiveDataField label="IBAN" value={identity.iban} mono />
+                <InteractiveDataField label="Currency" value={identity.currency} mono />
               </div>
-              <InteractiveDataField label="Bitcoin Address" value={identity.cryptoAddress} mono />
+              <InteractiveDataField label="IBAN" value={identity.iban} mono />
+              
+              <div className="my-3 border-t border-dashed border-zinc-200 dark:border-zinc-800"></div>
+              
+              <div className="grid grid-cols-2 gap-x-4">
+                <InteractiveDataField label="Bitcoin" value={identity.cryptoAddress} mono />
+                <InteractiveDataField label="Ethereum" value={identity.ethereumAddress} mono />
+              </div>
+              <div className="mt-auto">
+                <SectionTitle icon={Plane} title="Aviation Vector" />
+                <InteractiveDataField label="Flight Record Locator" value={identity.recordLocator} mono />
+              </div>
             </div>
 
           </div>
