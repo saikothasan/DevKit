@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { User, Calendar, MessageSquarePlus, MessageCircle, Flame, Camera, Loader2, AlertCircle, Shield, ShieldAlert, Network, Share2, CheckCircle2 } from 'lucide-react';
+import { User, Calendar, MessageSquarePlus, MessageCircle, Flame, Camera, Loader2, Shield, ShieldAlert, Network, Share2, CheckCircle2 } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 import { useAuth } from '@/context/AuthContext';
 
