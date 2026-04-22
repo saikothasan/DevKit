@@ -1,22 +1,22 @@
 import { Routes, Route } from 'react-router-dom';
-import { Layout } from './components/layout/Layout';
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
+import { Layout } from '@/components/layout/Layout';
+import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
 
-// Pages
-import Forum from './pages/Forum';
-import Thread from './pages/Thread';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
-import Profile from './pages/Profile';
-import Messages from './pages/Messages';
+// Application Pages
+import Forum from '@/pages/Forum';
+import Thread from '@/pages/Thread';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import VerifyEmail from '@/pages/VerifyEmail';
+import Profile from '@/pages/Profile';
+import Messages from '@/pages/Messages';
 
-// Tools
-import TestCards from './pages/TestCards';
-import FakeAddress from './pages/FakeAddress';
-import CardChecker from './pages/CardChecker';
-import BinChecker from './pages/BinChecker';
+// Development Tools & Utilities
+import TestCards from '@/pages/TestCards';
+import FakeAddress from '@/pages/FakeAddress';
+import CardChecker from '@/pages/CardChecker';
+import BinChecker from '@/pages/BinChecker';
 
 export default function App() {
   return (
@@ -24,21 +24,21 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Layout />}>
-            {/* Main Forum Routes */}
+            {/* Primary Community Routing */}
             <Route index element={<Forum />} />
             <Route path="forum/:id" element={<Thread />} />
             
-            {/* Utility / Tool Routes */}
+            {/* Engineering Utilities Routing */}
             <Route path="test-cards" element={<TestCards />} />
             <Route path="fake-address" element={<FakeAddress />} />
             <Route path="fake-address/:locale" element={<FakeAddress />} />
             <Route path="card-checker" element={<CardChecker />} />
             <Route path="bin-checker" element={<BinChecker />} />
             
-            {/* Real-time WebSockets Routing */}
+            {/* Real-time Data Routing */}
             <Route path="messages" element={<Messages />} />
             
-            {/* Authentication & User Management Routes */}
+            {/* Identity Access Management Routing */}
             <Route path="login" element={<Login />} />
             <Route path="register" element={<Register />} />
             <Route path="verify-email" element={<VerifyEmail />} />
