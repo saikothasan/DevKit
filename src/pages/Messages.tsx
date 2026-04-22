@@ -24,12 +24,11 @@ export default function Messages() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isWsConnecting, setIsWsConnecting] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   
-  const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,35 +41,33 @@ export default function Messages() {
   useEffect(() => {
     if (!activeConvo) return;
     setMessages([]);
-    setIsWsConnecting(true);
+    setIsInitializing(true);
     setSelectedFile(null);
     setUploadError('');
     
-    fetch(`/api/chat/messages/${activeConvo.id}`)
-      .then(r => r.json())
-      .then((data: any) => { 
-        if(!data.error) setMessages(data as ChatMessage[]); 
-        scrollToBottom(); 
-      });
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/chat/ws?conversationId=${activeConvo.id}`);
-    
-    ws.onopen = () => setIsWsConnecting(false);
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'chat_message') {
-        setMessages(prev => [...prev, data.message]);
-        scrollToBottom();
-      }
+    const fetchVectors = () => {
+      fetch(`/api/chat/messages/${activeConvo.id}`)
+        .then(r => r.json())
+        .then((data: any) => { 
+          if(!data.error) {
+            setMessages(prev => {
+              if (prev.length !== data.length) setTimeout(scrollToBottom, 50);
+              return data as ChatMessage[];
+            });
+          }
+          setIsInitializing(false);
+        });
     };
+
+    fetchVectors();
     
-    wsRef.current = ws;
-    return () => { if(ws.readyState === 1) ws.close(); };
+    // Stateless Polling Mechanism
+    const interval = setInterval(fetchVectors, 2500);
+    return () => clearInterval(interval);
   }, [activeConvo]);
 
   const scrollToBottom = () => {
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,15 +85,15 @@ export default function Messages() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && !selectedFile) || !activeConvo || !wsRef.current || !user) return;
+    if ((!input.trim() && !selectedFile) || !activeConvo || !user) return;
     
     let fileUrl = null;
     let fileName = null;
     let fileType = null;
     setUploadError('');
+    setIsUploading(true);
 
     if (selectedFile) {
-      setIsUploading(true);
       const formData = new FormData();
       formData.append('file', selectedFile);
       
@@ -118,26 +115,33 @@ export default function Messages() {
          setIsUploading(false);
          return;
       }
-      setIsUploading(false);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
 
     const payload = { 
-      type: 'chat_message', 
-      conversationId: activeConvo.id, 
-      senderId: user.id, 
       content: input.trim(),
       fileUrl, fileName, fileType
     };
     
-    wsRef.current.send(JSON.stringify(payload));
-    setMessages(prev => [...prev, { 
-      senderId: user.id, content: input.trim(), fileUrl, fileName, fileType, createdAt: new Date().toISOString() 
-    }]);
-    
-    setInput('');
-    scrollToBottom();
+    try {
+      const res = await fetch(`/api/chat/messages/${activeConvo.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        const newMsg = await res.json();
+        setMessages(prev => [...prev, newMsg]);
+        setInput('');
+        scrollToBottom();
+      }
+    } catch (e) {
+      setUploadError("Failed to transmit message.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (isLoading) return <div className="p-12 flex justify-center"><Loader2 className="size-8 animate-spin text-orange-500" /></div>;
@@ -210,11 +214,11 @@ export default function Messages() {
                   </div>
                   <span className="font-bold text-lg">{activeConvo.targetUser?.username}</span>
                 </div>
-                {isWsConnecting && <span className="flex items-center gap-2 text-xs font-bold text-orange-500 uppercase tracking-widest"><Loader2 className="size-3 animate-spin" /> Tunneling...</span>}
+                {isInitializing && <span className="flex items-center gap-2 text-xs font-bold text-orange-500 uppercase tracking-widest"><Loader2 className="size-3 animate-spin" /> Syncing...</span>}
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 custom-scrollbar bg-zinc-50/30 dark:bg-[#0a0a0a]/30">
-                {messages.length === 0 && !isWsConnecting && (
+                {messages.length === 0 && !isInitializing && (
                    <div className="flex flex-col items-center justify-center h-full opacity-40 text-center">
                      <MessageSquare className="size-12 mb-3 text-zinc-500" />
                      <p className="text-sm font-semibold">End-to-end vector established.<br/>Initiate transmission.</p>
