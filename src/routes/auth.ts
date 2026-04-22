@@ -5,8 +5,8 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq, count, and, sql } from 'drizzle-orm';
 import { sign, verify } from 'hono/jwt';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
-import { users, turnstileEvents } from '../db/schema';
-import { hashPassword, verifyPassword } from '../utils/crypto';
+import { users, turnstileEvents } from '@/db/schema';
+import { hashPassword, verifyPassword } from '@/utils/crypto';
 
 export type AuthEnv = {
   Bindings: { 
