@@ -15,7 +15,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["./worker-configuration.d.ts", "vite/client", "node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", ".wrangler"]
 }
