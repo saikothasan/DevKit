@@ -62,7 +62,7 @@ export function MobileHeader() {
         <div className="flex h-14 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4">
           <NavLink to="/" className="flex items-center gap-2 font-semibold">
             <Logo className="h-6 w-6" />
-            <span className="text-zinc-900 dark:text-zinc-100">DevKit Pro</span>
+            <span className="text-zinc-900 dark:text-zinc-100">Visatk</span>
           </NavLink>
           <button 
             onClick={() => setIsOpen(false)}
