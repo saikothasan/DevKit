@@ -5,7 +5,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { verify } from 'hono/jwt';
 import { getCookie } from 'hono/cookie';
-import { threads, replies, users, threadUnlocks } from '../db/schema';
+import { threads, replies, users, threadUnlocks } from '@/db/schema';
 import { requireAuth } from './auth';
 
 export type ForumEnv = {
