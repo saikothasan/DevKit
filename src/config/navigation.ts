@@ -1,4 +1,12 @@
-import { ShieldCheck, CreditCard, Terminal, MapPin, MessageSquare, Send } from 'lucide-react';
+import { 
+  ShieldCheck, 
+  CreditCard, 
+  Terminal, 
+  MapPin, 
+  MessageSquare, 
+  Send,
+  Network
+} from 'lucide-react';
 
 export interface NavItem {
   to: string;
@@ -6,15 +14,20 @@ export interface NavItem {
   label: string;
   group: 'Utilities' | 'Community';
   external?: boolean;
+  badge?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  // Utility & Development Vectors
   { to: '/card-checker', icon: ShieldCheck, label: 'Live Gateway', group: 'Utilities' },
   { to: '/bin-checker', icon: CreditCard, label: 'BIN Lookup', group: 'Utilities' },
   { to: '/test-cards', icon: Terminal, label: 'Vector Gen', group: 'Utilities' },
   { to: '/fake-address', icon: MapPin, label: 'Mock Identity', group: 'Utilities' },
   
+  // Community & Communications Layer
   { to: '/', icon: MessageSquare, label: 'Discussion Board', group: 'Community' },
-  // Native Telegram Promotion
+  { to: '/messages', icon: Network, label: 'Secure Comm-Link', group: 'Community', badge: 'LIVE' },
+  
+  // External Endpoints
   { to: 'https://t.me/drkingbd', icon: Send, label: 'Telegram Channel', group: 'Community', external: true }
 ];
