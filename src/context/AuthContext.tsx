@@ -1,7 +1,17 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 type UserRole = 'admin' | 'moderator' | 'user';
-type User = { id: number; username: string; role: UserRole; points: number; avatarUrl?: string | null; isVerified: boolean; } | null;
+
+export type User = { 
+  id: number; 
+  username: string; 
+  role: UserRole; 
+  points: number; 
+  avatarUrl?: string | null; 
+  isVerified: boolean; 
+  isVip: boolean;
+  vipSince?: string;
+} | null;
 
 interface AuthState {
   user: User;
@@ -32,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
+    window.location.href = '/login';
   };
 
   useEffect(() => { refreshUser(); }, []);
@@ -45,6 +56,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
+  if (context === undefined) throw new Error('useAuth must be executed within an AuthProvider instance');
   return context;
 };
