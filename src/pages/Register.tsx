@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile'; 
-import { AlertCircle, UserPlus, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { AlertCircle, UserPlus, Mail, Lock, User, Loader2, ArrowRight } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 
 function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -63,51 +63,66 @@ export default function Register() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh] p-4 animation-fade-in relative z-10">
+    <main className="flex items-center justify-center min-h-[80vh] p-4 relative z-10">
       <SeoHead title="Initialize Node" description="Establish a designated identity within the network." />
       
-      <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+      {/* Ambient Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg h-96 bg-orange-500/20 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+
+      <div className="w-full max-w-[420px] bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800/80 rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-zinc-900/5 dark:ring-white/5">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
         
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 mb-4 shadow-sm">
-            <UserPlus className="w-6 h-6" />
+        <header className="text-center mb-8 animation-fade-in">
+          <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-500/20 text-orange-500 mb-5 shadow-inner">
+            <UserPlus className="size-6" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Registry Initialization</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Deploy an architectural identity to access vectors.</p>
-        </div>
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight">Registry Initialization</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm font-medium">Deploy an architectural identity to access vectors.</p>
+        </header>
 
-        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98]">
-          <GitHubIcon className="w-5 h-5" /> Execute via External Identity (GitHub)
+        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98] group">
+          <GitHubIcon className="size-5 group-hover:scale-110 transition-transform" /> 
+          Execute via External Identity (GitHub)
         </a>
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-3 font-semibold bg-white dark:bg-[#0a0a0a] text-zinc-500 uppercase tracking-widest text-[10px]">Or execute manual compile</span></div>
+          <div className="relative flex justify-center text-sm"><span className="px-3 font-bold bg-white dark:bg-[#0a0a0a] text-zinc-400 uppercase tracking-widest text-[10px]">Or execute manual compile</span></div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 shadow-inner">
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400 font-bold">{error}</p>
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 shadow-inner animation-fade-in">
+            <AlertCircle className="size-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold leading-snug">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
-            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="text" placeholder="Designation Array (Username)" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Designation Array</label>
+            <div className="relative group">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+              <input required type="text" placeholder="username" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+            </div>
           </div>
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="email" placeholder="Routing Protocol (Email)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+          
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Routing Protocol</label>
+            <div className="relative group">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+              <input required type="email" placeholder="entity@domain.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+            </div>
           </div>
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="password" placeholder="Cryptographic Key (Password)" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+          
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Cryptographic Key</label>
+            <div className="relative group">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+              <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
+            </div>
           </div>
 
-          <div className="flex justify-center py-2 min-h-[65px] bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="flex justify-center py-2 min-h-[65px] bg-zinc-50 dark:bg-zinc-900/30 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <Turnstile
               key={turnstileKey}
               siteKey={siteKey}
@@ -124,10 +139,10 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8">
-          Pre-existing configuration? <Link to="/login" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Authenticate</Link>
-        </p>
+        <footer className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-800">
+          Pre-existing configuration? <Link to="/login" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors inline-flex items-center gap-1">Authenticate <ArrowRight className="size-3" /></Link>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 }
