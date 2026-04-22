@@ -1,8 +1,8 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile'; 
-import { AlertCircle, UserPlus, Mail, Lock, User } from 'lucide-react';
-import { SeoHead } from '../components/SeoHead';
+import { AlertCircle, UserPlus, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { SeoHead } from '@/components/SeoHead';
 
 function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
@@ -29,7 +29,7 @@ export default function Register() {
     setError(null);
     
     if (!turnstileToken) {
-      setError('Security verification required. Please complete the Turnstile challenge.');
+      setError('Security verification protocol mandatory. Execute the challenge sequence.');
       return;
     }
 
@@ -47,10 +47,7 @@ export default function Register() {
       if (!response.ok) {
         setTurnstileToken('');
         setTurnstileKey(prev => prev + 1);
-        let errMsg = 'Registration failed';
-        if (typeof data.error === 'string') errMsg = data.error;
-        else if (data.error?.issues?.[0]?.message) errMsg = data.error.issues[0].message;
-        throw new Error(errMsg);
+        throw new Error(data.error?.issues?.[0]?.message || data.error || 'Identity registration fault');
       }
 
       if (data.requiresVerification) {
@@ -67,51 +64,50 @@ export default function Register() {
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] p-4 animation-fade-in relative z-10">
-      <SeoHead title="Establish Vector" description="Register a new node on the DevKit infrastructure." />
+      <SeoHead title="Initialize Node" description="Establish a designated identity within the network." />
       
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-xl relative overflow-hidden">
+      <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
         
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 mb-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 mb-4 shadow-sm">
             <UserPlus className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Initialize Node</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Deploy a new identity onto the network.</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Registry Initialization</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm">Deploy an architectural identity to access vectors.</p>
         </div>
 
-        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-medium py-3 rounded-xl transition-colors">
-          <GitHubIcon className="w-5 h-5" />
-          Deploy via GitHub Profile
+        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98]">
+          <GitHubIcon className="w-5 h-5" /> Execute via External Identity (GitHub)
         </a>
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-zinc-900 text-zinc-500">Or execute manual payload</span></div>
+          <div className="relative flex justify-center text-sm"><span className="px-3 font-semibold bg-white dark:bg-[#0a0a0a] text-zinc-500 uppercase tracking-widest text-[10px]">Or execute manual compile</span></div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 shadow-inner">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="text" placeholder="Designation (Username)" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+            <input required type="text" placeholder="Designation Array (Username)" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
           </div>
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="email" placeholder="Routing Address (Email)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+            <input required type="email" placeholder="Routing Protocol (Email)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
           </div>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input required type="password" placeholder="Passphrase" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all placeholder:text-zinc-400" />
+            <input required type="password" placeholder="Cryptographic Key (Password)" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
           </div>
 
-          <div className="flex justify-center py-2 min-h-[65px]">
+          <div className="flex justify-center py-2 min-h-[65px] bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <Turnstile
               key={turnstileKey}
               siteKey={siteKey}
@@ -122,13 +118,14 @@ export default function Register() {
             />
           </div>
 
-          <button disabled={isLoading || !turnstileToken} className="w-full bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 mt-2">
-            {isLoading ? 'Executing...' : 'Deploy Node'}
+          <button disabled={isLoading || !turnstileToken} className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 mt-4 shadow-lg active:scale-[0.98]">
+            {isLoading ? <Loader2 className="size-5 animate-spin" /> : <UserPlus className="size-5" />}
+            {isLoading ? 'Compiling Registry...' : 'Initialize Implementation'}
           </button>
         </form>
 
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8">
-          Pre-existing node? <Link to="/login" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Authenticate</Link>
+          Pre-existing configuration? <Link to="/login" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors">Authenticate</Link>
         </p>
       </div>
     </div>
