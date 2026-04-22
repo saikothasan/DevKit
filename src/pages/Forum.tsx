@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight, Crown } from 'lucide-react';
+import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '#/context/ToastContext';
+import { useToast } from '@/context/ToastContext';
 
 const CATEGORIES = ['all', 'general', 'bins', 'methods', 'bin-list', 'vcc', 'redeem-coupons-keys'];
 
@@ -65,7 +65,7 @@ export default function Forum() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newThread)
       });
-      const data = await res.json();
+      const data = await res.json() as { error?: string; issues?: any[] };
       
       if (res.ok) {
         toast('Vector successfully published to the public ledger.', 'success');
