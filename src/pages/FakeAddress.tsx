@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { SeoHead } from '../components/SeoHead';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { SeoHead } from '@/components/SeoHead';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { 
   Copy, Check, MapPin, UserSquare2, Globe, Loader2, ArrowLeft,
   Briefcase, Wifi, Database, FileCode2, Shield, ChevronRight, RefreshCw, MousePointerClick
