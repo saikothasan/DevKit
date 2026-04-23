@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
 import { sql, relations } from 'drizzle-orm';
 
 // ==========================================
@@ -22,7 +22,11 @@ export const users = sqliteTable('users', {
   resetTokenExpiry: integer('reset_token_expiry', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
-});
+}, (table) => ({
+  usernameIdx: index('username_idx').on(table.username),
+  emailIdx: index('email_idx').on(table.email),
+  githubIdIdx: index('github_id_idx').on(table.githubId),
+}));
 
 // ==========================================
 // 2. Apirone Cryptographic Payment Ledger
@@ -61,7 +65,11 @@ export const threads = sqliteTable('threads', {
   isLocked: integer('is_locked', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
-});
+}, (table) => ({
+  authorIdIdx: index('threads_author_id_idx').on(table.authorId),
+  categoryIdx: index('threads_category_idx').on(table.category),
+  createdAtIdx: index('threads_created_at_idx').on(table.createdAt),
+}));
 
 export const replies = sqliteTable('replies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -73,7 +81,10 @@ export const replies = sqliteTable('replies', {
   isAcceptedAnswer: integer('is_accepted_answer', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
-});
+}, (table) => ({
+  threadIdIdx: index('replies_thread_id_idx').on(table.threadId),
+  authorIdIdx: index('replies_author_id_idx').on(table.authorId),
+}));
 
 // ==========================================
 // 4. Forum Execution Vectors (Unlocks & Votes)
@@ -136,7 +147,10 @@ export const turnstileEvents = sqliteTable('turnstile_events', {
   eventType: text('event_type').notNull(),
   ipAddress: text('ip_address'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
-});
+}, (table) => ({
+  ephemeralIdIdx: index('ephemeral_id_idx').on(table.ephemeralId),
+  createdAtIdx: index('turnstile_created_at_idx').on(table.createdAt),
+}));
 
 // ==========================================
 // 6. ORM Relations Configurations
