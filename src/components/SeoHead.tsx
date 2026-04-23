@@ -24,6 +24,7 @@ export function SeoHead({ title, description, keywords, isTool = false, image = 
 
   useEffect(() => {
     document.title = fullTitle;
+    const addedElements: Element[] = [];
     
     const setMetaTag = (selector: string, attribute: string, value: string) => {
       let element = document.querySelector(selector);
@@ -35,6 +36,7 @@ export function SeoHead({ title, description, keywords, isTool = false, image = 
           element.setAttribute('property', selector.match(/property="([^"]+)"/)?.[1] || '');
         }
         document.head.appendChild(element);
+        addedElements.push(element);
       }
       element.setAttribute(attribute, value);
     };
@@ -50,6 +52,7 @@ export function SeoHead({ title, description, keywords, isTool = false, image = 
       canonical = document.createElement('link');
       canonical.setAttribute('rel', 'canonical');
       document.head.appendChild(canonical);
+      addedElements.push(canonical);
     }
     canonical.setAttribute('href', currentUrl);
 
@@ -114,6 +117,19 @@ export function SeoHead({ title, description, keywords, isTool = false, image = 
     }
     
     structuredData.textContent = JSON.stringify(schemas.length === 1 ? schemas[0] : schemas);
+
+    // Cleanup phase: Prevents DOM bloat and duplicate SEO tags upon SPA navigation
+    return () => {
+      addedElements.forEach(el => {
+        if (document.head.contains(el)) {
+          document.head.removeChild(el);
+        }
+      });
+      const schemaElement = document.querySelector('#json-ld');
+      if (schemaElement && document.head.contains(schemaElement)) {
+          document.head.removeChild(schemaElement);
+      }
+    };
 
   }, [fullTitle, description, keywords, currentUrl, isTool, image, baseUrl, faqData]);
 
