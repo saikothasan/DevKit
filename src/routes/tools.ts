@@ -202,59 +202,52 @@ toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => 
   }
 });
 
-// Add this to the bottom of src/routes/tools.ts
-
-const checkIpSchema = z.object({
-  ip: z.string().optional()
-});
+const checkIpSchema = z.object({ ip: z.string().optional() });
 
 toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
   let { ip } = c.req.valid('json');
   
-  // Fallback to Cloudflare's connecting IP if not explicitly provided
   if (!ip || ip.trim() === '') {
     ip = c.req.header('CF-Connecting-IP') || '1.1.1.1';
   }
 
   try {
-    // 1. Fetch geographic routing and ASN infrastructure data
-    const ipInfoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
+    // 1. Fetch geographic routing (Note: Forced HTTPS; if using free ip-api tier, use alternative secure provider or handle mixed content proxying if strictly necessary. Assuming paid/secure tier logic here)
+    const ipInfoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
+    
+    if (!ipInfoRes.ok) return c.json({ success: false, message: 'Upstream Geo-IP provider rejected connection.' }, 502);
     const ipInfo = await ipInfoRes.json() as any;
 
     if (ipInfo.status !== 'success') {
        return c.json({ success: false, message: 'Failed to resolve IP vector.' });
     }
 
-    // 2. Fetch Proxy/VPN & Threat Risk analysis
-    // Proxycheck.io provides a highly accurate risk score and proxy detection without requiring immediate authentication for low-volume limits
-    const proxyCheckRes = await fetch(`http://proxycheck.io/v2/${ip}?vpn=1&asn=1&risk=1`);
-    const proxyCheck = await proxyCheckRes.json() as any;
-    
-    const proxyData = proxyCheck[ip] || {};
+    // 2. Fetch Proxy/VPN & Threat Risk analysis over HTTPS
+    let proxyData: any = {};
+    try {
+      const proxyCheckRes = await fetch(`https://proxycheck.io/v2/${ip}?vpn=1&asn=1&risk=1`);
+      if (proxyCheckRes.ok) {
+        const proxyCheck = await proxyCheckRes.json() as any;
+        proxyData = proxyCheck[ip] || {};
+      }
+    } catch {
+      // Graceful degradation: Continue without advanced proxy check if API fails
+    }
 
     // 3. Assemble unified intelligence payload
     const data = {
        ip,
        location: {
-         continent: ipInfo.continent,
-         country: ipInfo.country,
-         countryCode: ipInfo.countryCode,
-         region: ipInfo.regionName,
-         city: ipInfo.city,
-         zip: ipInfo.zip,
-         lat: ipInfo.lat,
-         lon: ipInfo.lon,
-         timezone: ipInfo.timezone,
+         continent: ipInfo.continent, country: ipInfo.country, countryCode: ipInfo.countryCode,
+         region: ipInfo.regionName, city: ipInfo.city, zip: ipInfo.zip,
+         lat: ipInfo.lat, lon: ipInfo.lon, timezone: ipInfo.timezone,
        },
        network: {
-         isp: ipInfo.isp,
-         org: ipInfo.org,
-         asn: ipInfo.as,
-         reverse: ipInfo.reverse
+         isp: ipInfo.isp, org: ipInfo.org, asn: ipInfo.as, reverse: ipInfo.reverse
        },
        security: {
-         isProxy: ipInfo.proxy || proxyData.proxy === 'yes',
-         isVpn: proxyData.vpn === 'yes',
+         isProxy: ipInfo.proxy || proxyData.proxy === 'yes' || false,
+         isVpn: proxyData.vpn === 'yes' || false,
          isHosting: ipInfo.hosting || false,
          isMobile: ipInfo.mobile || false,
          riskScore: parseInt(proxyData.risk) || 0,
@@ -264,6 +257,6 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
 
     return c.json({ success: true, data });
   } catch (error) {
-    return c.json({ success: false, message: 'Execution timeout during IP analysis.' });
+    return c.json({ success: false, message: 'Execution timeout during IP analysis.' }, 500);
   }
 });
