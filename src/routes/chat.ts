@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, or, and, desc, asc, not, like, sql } from 'drizzle-orm';
+// Removed unused 'asc' import to satisfy TS6133
+import { eq, or, and, desc, not, like, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { users, conversations, messages } from '@/db/schema';
@@ -79,15 +80,18 @@ chatRouter.get('/directory', requireAuth, async (c) => {
   const user = c.get('user');
   const q = c.req.query('q');
   
-  let conditions = not(eq(users.id, user.id));
+  // Fix for TS2322: Build conditions array dynamically
+  const conditions = [not(eq(users.id, user.id))];
+  
   if (q && q.trim().length > 0) {
-    conditions = and(conditions, like(users.username, `%${q.trim()}%`));
+    conditions.push(like(users.username, `%${q.trim()}%`));
   }
 
   const directory = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl })
     .from(users)
-    .where(conditions)
-    .limit(50); // Hard limit to prevent scraping
+    // Spread array into the and() function securely
+    .where(and(...conditions))
+    .limit(50);
     
   return c.json(directory);
 });
