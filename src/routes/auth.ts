@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, count, and, sql, desc } from 'drizzle-orm';
+import { eq, count, and, sql, desc, gt } from 'drizzle-orm';
 import { sign, verify } from 'hono/jwt';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { users, turnstileEvents, threads, replies } from '@/db/schema';
@@ -192,6 +192,78 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
   
   setCookie(c, 'auth_token', jwt, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 604800 });
   return c.json({ success: true });
+});
+
+// ==========================================
+// Cryptographic Recovery Vectors
+// ==========================================
+
+authRouter.post('/forgot-password', zValidator('json', z.object({ email: z.string().email(), turnstileToken: z.string() })), async (c) => {
+  const db = drizzle(c.env.DB);
+  const { email, turnstileToken } = c.req.valid('json');
+  
+  const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
+  const validation = await validateTurnstile(turnstileToken, c.env.TURNSTILE_SECRET_KEY || '', ip);
+  if (!validation.success) return c.json({ error: 'Security anomaly detected.' }, 400);
+
+  const user = await db.select().from(users).where(eq(users.email, email)).get();
+  
+  // Security: Prevent user enumeration
+  if (!user) return c.json({ message: "If an account exists, a recovery sequence has been dispatched." });
+
+  // 32-byte entropy token
+  const resetToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+  const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 Hour
+
+  await db.update(users).set({ resetToken, resetTokenExpiry }).where(eq(users.id, user.id));
+
+  if (c.env.RESEND_API_KEY) {
+    const resetUrl = `${new URL(c.req.url).origin}/reset-password?token=${resetToken}`;
+    
+    c.executionCtx.waitUntil(
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: c.env.RESEND_FROM_EMAIL || 'Security <noreply@visatk.us>',
+          to: [email],
+          subject: 'Cryptographic Credential Reset',
+          html: `<p>A secure reset request was initiated. <a href="${resetUrl}">Click here to re-key your credentials.</a> The link expires in 1 hour.</p>`
+        })
+      })
+    );
+  }
+
+  return c.json({ message: "If an account exists, a recovery sequence has been dispatched." });
+});
+
+authRouter.post('/reset-password', zValidator('json', z.object({ 
+  token: z.string(), 
+  newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Cryptographic strength insufficient") 
+})), async (c) => {
+  const db = drizzle(c.env.DB);
+  const { token, newPassword } = c.req.valid('json');
+
+  const now = new Date();
+  
+  const user = await db.select().from(users).where(
+    and(
+      eq(users.resetToken, token),
+      gt(users.resetTokenExpiry, now)
+    )
+  ).get();
+
+  if (!user) return c.json({ error: 'Reset vector is invalid or expired.' }, 400);
+
+  const newPasswordHash = await hashPassword(newPassword);
+
+  await db.update(users).set({ 
+    passwordHash: newPasswordHash, 
+    resetToken: null, 
+    resetTokenExpiry: null 
+  }).where(eq(users.id, user.id));
+
+  return c.json({ success: true, message: "Credentials re-keyed successfully." });
 });
 
 // ==========================================
