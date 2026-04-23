@@ -57,6 +57,7 @@ forumRouter.get('/threads', async (c) => {
         authorId: threads.authorId,
         upvotes: threads.upvotes, 
         views: threads.views,
+        replyCount: threads.replyCount,
         isPinned: threads.isPinned, 
         isLocked: threads.isLocked, 
         createdAt: threads.createdAt,
@@ -86,12 +87,17 @@ forumRouter.get('/threads', async (c) => {
 });
 
 // ==========================================
-// Thread Detail & Decryption Logic
+// Thread Detail, Decryption & Paginated Replies
 // ==========================================
 
 forumRouter.get('/threads/:id', async (c) => {
   const db = drizzle(c.env.DB);
   const threadId = parseInt(c.req.param('id'));
+  
+  // Security: Paginate replies to prevent Edge memory exhaustion
+  const replyPage = Math.max(1, parseInt(c.req.query('page') || '1'));
+  const replyLimit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '50')));
+  const replyOffset = (replyPage - 1) * replyLimit;
 
   if (isNaN(threadId)) return c.json({ error: 'Malformed identifier.' }, 400);
 
@@ -103,7 +109,10 @@ forumRouter.get('/threads/:id', async (c) => {
     db.update(threads).set({ views: sql`${threads.views} + 1` }).where(eq(threads.id, threadId)).execute()
   );
   
-  const threadReplies = await db.select().from(replies).where(eq(replies.threadId, threadId)).orderBy(replies.createdAt).execute();
+  const [threadReplies, totalReplies] = await Promise.all([
+    db.select().from(replies).where(eq(replies.threadId, threadId)).orderBy(replies.createdAt).limit(replyLimit).offset(replyOffset).execute(),
+    db.select({ value: count() }).from(replies).where(eq(replies.threadId, threadId)).get()
+  ]);
   
   let currentUser: any = null;
   const token = getCookie(c, 'auth_token');
@@ -131,12 +140,17 @@ forumRouter.get('/threads/:id', async (c) => {
     ...publicThread, 
     hasLockedContent: !!lockedContent, 
     lockedContent: canViewLocked ? lockedContent : undefined,
-    replies: threadReplies 
+    replies: threadReplies,
+    meta: {
+      totalReplies: totalReplies?.value || 0,
+      replyPage,
+      replyLimit
+    }
   });
 });
 
 // ==========================================
-// Thread Creation & Validation
+// Thread Creation, Validation & Mutation
 // ==========================================
 
 const createThreadSchema = z.object({ 
@@ -145,6 +159,13 @@ const createThreadSchema = z.object({
   category: z.string().min(2).max(30),
   lockedContent: z.string().max(20000).optional(),
   unlockCost: z.number().min(0).max(10000).default(0)
+});
+
+const updateThreadSchema = z.object({
+  title: z.string().min(5).max(100).optional(),
+  content: z.string().min(10).max(20000).optional(),
+  lockedContent: z.string().max(20000).optional(),
+  unlockCost: z.number().min(0).max(10000).optional()
 });
 
 forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema), async (c) => {
@@ -168,6 +189,31 @@ forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema)
   } catch (err) {
     return c.json({ error: 'Thread compilation failed.' }, 500);
   }
+});
+
+forumRouter.patch('/threads/:id', requireAuth, zValidator('json', updateThreadSchema), async (c) => {
+  const db = drizzle(c.env.DB);
+  const user = c.get('user');
+  const threadId = parseInt(c.req.param('id'));
+  const payload = c.req.valid('json');
+
+  const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
+  if (!thread) return c.json({ error: 'Target vector not found' }, 404);
+  
+  if (thread.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') {
+    return c.json({ error: 'Forbidden: Insufficient privileges to mutate this vector.' }, 403);
+  }
+
+  const updateData: any = { updatedAt: sql`(strftime('%s', 'now'))` };
+  if (payload.title) updateData.title = payload.title;
+  if (payload.content) updateData.content = payload.content;
+  if (payload.lockedContent !== undefined) {
+    updateData.lockedContent = payload.lockedContent.trim() ? payload.lockedContent : null;
+    if (payload.unlockCost !== undefined) updateData.unlockCost = updateData.lockedContent ? payload.unlockCost : 0;
+  }
+
+  const result = await db.update(threads).set(updateData).where(eq(threads.id, threadId)).returning();
+  return c.json(result[0]);
 });
 
 // ==========================================
@@ -211,10 +257,11 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
 });
 
 // ==========================================
-// Replies & Voting Execution
+// Replies & Voting Execution (Hardened)
 // ==========================================
 
 const replySchema = z.object({ content: z.string().min(2).max(5000) });
+const updateReplySchema = z.object({ content: z.string().min(2).max(5000) });
 
 forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySchema), async (c) => {
   const db = drizzle(c.env.DB);
@@ -228,13 +275,36 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
 
   try {
     const result = await db.insert(replies).values({ threadId, content, authorId: user.id, author: user.username }).returning();
+    
+    // Non-blocking telemetry and reputation updates
     c.executionCtx.waitUntil(
-      db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)).execute()
+      db.batch([
+        db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)),
+        db.update(threads).set({ replyCount: sql`${threads.replyCount} + 1` }).where(eq(threads.id, threadId))
+      ])
     );
+    
     return c.json(result[0], 201);
   } catch (err) {
     return c.json({ error: 'Transmission failed.' }, 500);
   }
+});
+
+forumRouter.patch('/replies/:id', requireAuth, zValidator('json', updateReplySchema), async (c) => {
+  const db = drizzle(c.env.DB);
+  const user = c.get('user');
+  const replyId = parseInt(c.req.param('id'));
+  const { content } = c.req.valid('json');
+
+  const reply = await db.select().from(replies).where(eq(replies.id, replyId)).get();
+  if (!reply) return c.json({ error: 'Target vector not found' }, 404);
+  
+  if (reply.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') {
+    return c.json({ error: 'Forbidden: Insufficient privileges.' }, 403);
+  }
+
+  const result = await db.update(replies).set({ content, updatedAt: sql`(strftime('%s', 'now'))` }).where(eq(replies.id, replyId)).returning();
+  return c.json(result[0]);
 });
 
 forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
@@ -247,11 +317,14 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
 
   try {
     if (type === 'thread') {
-      const existingVote = await db.select().from(threadVotes).where(and(eq(threadVotes.threadId, id), eq(threadVotes.userId, user.id))).get();
-      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
-
       const target = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
+      
+      // Security: Prevent self-voting reputation farming
+      if (target.authorId === user.id) return c.json({ error: 'Self-voting violation detected.' }, 403);
+
+      const existingVote = await db.select().from(threadVotes).where(and(eq(threadVotes.threadId, id), eq(threadVotes.userId, user.id))).get();
+      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
 
       await db.batch([
         db.insert(threadVotes).values({ threadId: id, userId: user.id, voteType: 1 }),
@@ -259,11 +332,14 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
         db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, target.authorId)) 
       ]);
     } else {
-      const existingVote = await db.select().from(replyVotes).where(and(eq(replyVotes.replyId, id), eq(replyVotes.userId, user.id))).get();
-      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
-
       const target = await db.select({ authorId: replies.authorId }).from(replies).where(eq(replies.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
+      
+      // Security: Prevent self-voting reputation farming
+      if (target.authorId === user.id) return c.json({ error: 'Self-voting violation detected.' }, 403);
+
+      const existingVote = await db.select().from(replyVotes).where(and(eq(replyVotes.replyId, id), eq(replyVotes.userId, user.id))).get();
+      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
 
       await db.batch([
         db.insert(replyVotes).values({ replyId: id, userId: user.id, voteType: 1 }),
@@ -278,7 +354,10 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   }
 });
 
-// Moderation & Deletion Routes Remain Unchanged (Delete/Lock/Pin functionality preserved securely)
+// ==========================================
+// Moderation Vectors (Hardened)
+// ==========================================
+
 forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
@@ -288,7 +367,11 @@ forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   if (!reply) return c.json({ error: 'Reply not found' }, 404);
   if (reply.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
 
-  await db.delete(replies).where(eq(replies.id, replyId)).execute();
+  await db.batch([
+    db.delete(replies).where(eq(replies.id, replyId)),
+    db.update(threads).set({ replyCount: sql`CASE WHEN reply_count > 0 THEN reply_count - 1 ELSE 0 END` }).where(eq(threads.id, reply.threadId))
+  ]);
+  
   return c.json({ success: true });
 });
 
