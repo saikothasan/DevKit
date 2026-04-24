@@ -47,7 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, turnstileToken })
     });
-    const data = await res.json();
+    
+    // Explicitly define the expected API error response structure
+    const data = (await res.json()) as { error?: string };
+    
     if (!res.ok) throw new Error(data.error || 'Login failed');
     await refreshUser();
   };
@@ -58,7 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, email, password, turnstileToken })
     });
-    const data = await res.json();
+    
+    // Assert the shape of the successful or failed registration payload
+    const data = (await res.json()) as { error?: string; requiresVerification?: boolean };
+    
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     if (!data.requiresVerification) {
       await refreshUser();
