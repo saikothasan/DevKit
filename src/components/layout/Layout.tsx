@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
+import { MobileNav } from './MobileNav';
 import { Footer } from './Footer';
 
 // Fallback loader to prevent layout shifts during chunk fetching
@@ -16,12 +17,12 @@ export function Layout() {
   const location = useLocation();
 
   return (
-    <div className="flex min-h-screen w-full bg-zinc-50/30 dark:bg-[#0a0a0a] overflow-hidden selection:bg-orange-500/30">
+    <div className="flex min-h-[100dvh] w-full bg-zinc-50/30 dark:bg-[#0a0a0a] overflow-hidden selection:bg-orange-500/30">
       {/* Desktop Navigation Landmark */}
       <Sidebar />
       
       {/* Primary Application Surface */}
-      <div className="flex flex-col flex-1 w-full md:pl-64 lg:pl-72 transition-all duration-300 h-screen overflow-y-auto custom-scrollbar relative bg-grid-zinc-100 dark:bg-grid-zinc-900/10">
+      <div className="flex flex-col flex-1 w-full md:pl-64 lg:pl-72 transition-all duration-300 h-[100dvh] overflow-y-auto custom-scrollbar relative bg-grid-zinc-100 dark:bg-grid-zinc-900/10">
         <MobileHeader />
         
         {/* Route Transition Engine optimized for Edge delivery */}
@@ -32,7 +33,8 @@ export function Layout() {
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 pt-6 flex flex-col will-change-[opacity,transform]"
+            /* Added pb-24 md:pb-8 to account for mobile bottom navigation overlap */
+            className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 pt-6 pb-24 md:pb-8 flex flex-col will-change-[opacity,transform]"
             role="main"
           >
             <Suspense fallback={<RouteFallback />}>
@@ -41,8 +43,14 @@ export function Layout() {
           </motion.main>
         </AnimatePresence>
         
-        <Footer />
+        {/* Render Footer only when it's not overlapping heavily on mobile, or pad it */}
+        <div className="pb-16 md:pb-0">
+          <Footer />
+        </div>
       </div>
+
+      {/* Native App-like Mobile Bottom Navigation */}
+      <MobileNav />
     </div>
   );
 }
