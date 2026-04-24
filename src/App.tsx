@@ -6,19 +6,19 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { Loader2 } from 'lucide-react';
 
-const Forum = lazy(() => import('@/pages/Forum'));
-const IpCheck = lazy(() => import('@/pages/IpCheck'));
-const Thread = lazy(() => import('@/pages/Thread'));
-const Login = lazy(() => import('@/pages/Login'));
-const Register = lazy(() => import('@/pages/Register'));
-const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'));
-const Profile = lazy(() => import('@/pages/Profile'));
-const Messages = lazy(() => import('@/pages/Messages'));
-const TestCards = lazy(() => import('@/pages/TestCards'));
-const FakeAddress = lazy(() => import('@/pages/FakeAddress'));
-const CardChecker = lazy(() => import('@/pages/CardChecker'));
-const BinChecker = lazy(() => import('@/pages/BinChecker'));
-const VIPPlan = lazy(() => import('@/pages/VIP'));
+const Forum = lazy(() => import('@/pages/Forum').then(m => ({ default: m.Forum })));
+const IpCheck = lazy(() => import('@/pages/IpCheck').then(m => ({ default: m.IpCheck })));
+const Thread = lazy(() => import('@/pages/Thread').then(m => ({ default: m.Thread })));
+const Login = lazy(() => import('@/pages/Login').then(m => ({ default: m.Login })));
+const Register = lazy(() => import('@/pages/Register').then(m => ({ default: m.Register })));
+const VerifyEmail = lazy(() => import('@/pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
+const Profile = lazy(() => import('@/pages/Profile').then(m => ({ default: m.Profile })));
+const Messages = lazy(() => import('@/pages/Messages').then(m => ({ default: m.Messages })));
+const TestCards = lazy(() => import('@/pages/TestCards').then(m => ({ default: m.TestCards })));
+const FakeAddress = lazy(() => import('@/pages/FakeAddress').then(m => ({ default: m.FakeAddress })));
+const CardChecker = lazy(() => import('@/pages/CardChecker').then(m => ({ default: m.CardChecker })));
+const BinChecker = lazy(() => import('@/pages/BinChecker').then(m => ({ default: m.BinChecker })));
+const VIPPlan = lazy(() => import('@/pages/VIP').then(m => ({ default: m.VIP })));
 
 const PageLoader = () => (
   <div className="flex min-h-[50vh] items-center justify-center">
@@ -30,8 +30,8 @@ const PageLoader = () => (
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // Cache data for 5 minutes
-      refetchOnWindowFocus: false, // Prevent aggressive refetching
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
       retry: 1, 
     },
   },
