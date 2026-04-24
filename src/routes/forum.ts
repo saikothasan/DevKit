@@ -33,6 +33,7 @@ forumRouter.get('/threads', async (c) => {
   const db = drizzle(c.env.DB);
   const q = c.req.query('q');
   const category = c.req.query('category');
+  const sort = c.req.query('sort') || 'latest';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
   const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '15')));
   const offset = (page - 1) * limit;
@@ -45,6 +46,11 @@ forumRouter.get('/threads', async (c) => {
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Determine sort parameter dynamically
+  let orderByClause = desc(threads.createdAt);
+  if (sort === 'popular') orderByClause = desc(threads.upvotes);
+  if (sort === 'views') orderByClause = desc(threads.views);
 
   try {
     const [totalCountResult, fetchedThreads] = await Promise.all([
@@ -66,7 +72,7 @@ forumRouter.get('/threads', async (c) => {
       })
       .from(threads)
       .where(whereClause)
-      .orderBy(desc(threads.isPinned), desc(threads.createdAt))
+      .orderBy(desc(threads.isPinned), orderByClause)
       .limit(limit)
       .offset(offset)
       .execute()
@@ -94,7 +100,6 @@ forumRouter.get('/threads/:id', async (c) => {
   const db = drizzle(c.env.DB);
   const threadId = parseInt(c.req.param('id'));
   
-  // Security: Paginate replies to prevent Edge memory exhaustion
   const replyPage = Math.max(1, parseInt(c.req.query('page') || '1'));
   const replyLimit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '50')));
   const replyOffset = (replyPage - 1) * replyLimit;
@@ -104,7 +109,6 @@ forumRouter.get('/threads/:id', async (c) => {
   const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Target vector not found.' }, 404);
   
-  // Non-blocking view counter increment
   c.executionCtx.waitUntil(
     db.update(threads).set({ views: sql`${threads.views} + 1` }).where(eq(threads.id, threadId)).execute()
   );
@@ -154,18 +158,11 @@ forumRouter.get('/threads/:id', async (c) => {
 // ==========================================
 
 const createThreadSchema = z.object({ 
-  title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title exceeds maximum length'), 
-  content: z.string().min(10, 'Content must be at least 10 characters').max(20000, 'Payload too large'), 
+  title: z.string().min(5).max(100), 
+  content: z.string().min(10).max(20000), 
   category: z.string().min(2).max(30),
   lockedContent: z.string().max(20000).optional(),
   unlockCost: z.number().min(0).max(10000).default(0)
-});
-
-const updateThreadSchema = z.object({
-  title: z.string().min(5).max(100).optional(),
-  content: z.string().min(10).max(20000).optional(),
-  lockedContent: z.string().max(20000).optional(),
-  unlockCost: z.number().min(0).max(10000).optional()
 });
 
 forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema), async (c) => {
@@ -191,31 +188,6 @@ forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema)
   }
 });
 
-forumRouter.patch('/threads/:id', requireAuth, zValidator('json', updateThreadSchema), async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
-  const threadId = parseInt(c.req.param('id'));
-  const payload = c.req.valid('json');
-
-  const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
-  if (!thread) return c.json({ error: 'Target vector not found' }, 404);
-  
-  if (thread.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') {
-    return c.json({ error: 'Forbidden: Insufficient privileges to mutate this vector.' }, 403);
-  }
-
-  const updateData: any = { updatedAt: sql`(strftime('%s', 'now'))` };
-  if (payload.title) updateData.title = payload.title;
-  if (payload.content) updateData.content = payload.content;
-  if (payload.lockedContent !== undefined) {
-    updateData.lockedContent = payload.lockedContent.trim() ? payload.lockedContent : null;
-    if (payload.unlockCost !== undefined) updateData.unlockCost = updateData.lockedContent ? payload.unlockCost : 0;
-  }
-
-  const result = await db.update(threads).set(updateData).where(eq(threads.id, threadId)).returning();
-  return c.json(result[0]);
-});
-
 // ==========================================
 // Premium Unlock Vector (VIP Integrated)
 // ==========================================
@@ -231,7 +203,6 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
   if (!thread || !thread.lockedContent) return c.json({ error: 'No encrypted payload found.' }, 404);
 
-  // VIP & Admin automatic bypass execution
   if (thread.authorId === user.id || user.role === 'admin' || user.isVip) {
     return c.json({ success: true, lockedContent: thread.lockedContent });
   }
@@ -240,11 +211,11 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   if (existing) return c.json({ success: true, lockedContent: thread.lockedContent });
 
   if (user.points < thread.unlockCost) {
-    return c.json({ error: `Insufficient reputation points. Required: ${thread.unlockCost}` }, 400);
+    return c.json({ error: `Insufficient reputation points.` }, 400);
   }
 
   try {
-    const authorReward = Math.floor(thread.unlockCost * 0.8); // 80% goes to author, 20% burned
+    const authorReward = Math.floor(thread.unlockCost * 0.8);
     await db.batch([
       db.update(users).set({ points: sql`${users.points} - ${thread.unlockCost}` }).where(eq(users.id, user.id)),
       db.update(users).set({ points: sql`${users.points} + ${authorReward}` }).where(eq(users.id, thread.authorId)),
@@ -261,7 +232,6 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
 // ==========================================
 
 const replySchema = z.object({ content: z.string().min(2).max(5000) });
-const updateReplySchema = z.object({ content: z.string().min(2).max(5000) });
 
 forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySchema), async (c) => {
   const db = drizzle(c.env.DB);
@@ -276,7 +246,6 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
   try {
     const result = await db.insert(replies).values({ threadId, content, authorId: user.id, author: user.username }).returning();
     
-    // Non-blocking telemetry and reputation updates
     c.executionCtx.waitUntil(
       db.batch([
         db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)),
@@ -288,23 +257,6 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
   } catch (err) {
     return c.json({ error: 'Transmission failed.' }, 500);
   }
-});
-
-forumRouter.patch('/replies/:id', requireAuth, zValidator('json', updateReplySchema), async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
-  const replyId = parseInt(c.req.param('id'));
-  const { content } = c.req.valid('json');
-
-  const reply = await db.select().from(replies).where(eq(replies.id, replyId)).get();
-  if (!reply) return c.json({ error: 'Target vector not found' }, 404);
-  
-  if (reply.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') {
-    return c.json({ error: 'Forbidden: Insufficient privileges.' }, 403);
-  }
-
-  const result = await db.update(replies).set({ content, updatedAt: sql`(strftime('%s', 'now'))` }).where(eq(replies.id, replyId)).returning();
-  return c.json(result[0]);
 });
 
 forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
@@ -319,8 +271,6 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
     if (type === 'thread') {
       const target = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
-      
-      // Security: Prevent self-voting reputation farming
       if (target.authorId === user.id) return c.json({ error: 'Self-voting violation detected.' }, 403);
 
       const existingVote = await db.select().from(threadVotes).where(and(eq(threadVotes.threadId, id), eq(threadVotes.userId, user.id))).get();
@@ -334,8 +284,6 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
     } else {
       const target = await db.select({ authorId: replies.authorId }).from(replies).where(eq(replies.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
-      
-      // Security: Prevent self-voting reputation farming
       if (target.authorId === user.id) return c.json({ error: 'Self-voting violation detected.' }, 403);
 
       const existingVote = await db.select().from(replyVotes).where(and(eq(replyVotes.replyId, id), eq(replyVotes.userId, user.id))).get();
@@ -347,17 +295,13 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
         db.update(users).set({ points: sql`${users.points} + 1` }).where(eq(users.id, target.authorId)) 
       ]);
     }
-    
     return c.json({ success: true, message: 'Reputation incremented' });
   } catch (err) {
     return c.json({ error: 'Database constraint execution failed.' }, 500);
   }
 });
 
-// ==========================================
-// Moderation Vectors (Hardened)
-// ==========================================
-
+// Moderation Vectors
 forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
@@ -365,32 +309,13 @@ forumRouter.delete('/replies/:id', requireAuth, async (c) => {
 
   const reply = await db.select().from(replies).where(eq(replies.id, replyId)).get();
   if (!reply) return c.json({ error: 'Reply not found' }, 404);
-  if (reply.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
+  if (reply.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') return c.json({ error: 'Forbidden' }, 403);
 
   await db.batch([
     db.delete(replies).where(eq(replies.id, replyId)),
     db.update(threads).set({ replyCount: sql`CASE WHEN reply_count > 0 THEN reply_count - 1 ELSE 0 END` }).where(eq(threads.id, reply.threadId))
   ]);
-  
   return c.json({ success: true });
-});
-
-forumRouter.patch('/threads/:id/pin', requireAuth, requireModerator, async (c) => {
-  const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
-  const thread = await db.select({ isPinned: threads.isPinned }).from(threads).where(eq(threads.id, threadId)).get();
-  if (!thread) return c.json({ error: 'Thread not found' }, 404);
-  const result = await db.update(threads).set({ isPinned: !thread.isPinned }).where(eq(threads.id, threadId)).returning();
-  return c.json(result[0]);
-});
-
-forumRouter.patch('/threads/:id/lock', requireAuth, requireModerator, async (c) => {
-  const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
-  const thread = await db.select({ isLocked: threads.isLocked }).from(threads).where(eq(threads.id, threadId)).get();
-  if (!thread) return c.json({ error: 'Thread not found' }, 404);
-  const result = await db.update(threads).set({ isLocked: !thread.isLocked }).where(eq(threads.id, threadId)).returning();
-  return c.json(result[0]);
 });
 
 forumRouter.delete('/threads/:id', requireAuth, async (c) => {
@@ -399,7 +324,8 @@ forumRouter.delete('/threads/:id', requireAuth, async (c) => {
   const user = c.get('user');
   const thread = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
-  if (thread.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
+  if (thread.authorId !== user.id && user.role !== 'admin' && user.role !== 'moderator') return c.json({ error: 'Forbidden' }, 403);
+  
   await db.delete(threads).where(eq(threads.id, threadId)).execute();
   return c.json({ success: true });
 });
