@@ -39,6 +39,7 @@ body {
   @apply selection:bg-orange-500/30 selection:text-orange-900;
   @apply dark:text-zinc-100 dark:selection:bg-orange-500/40 dark:selection:text-orange-100;
   overflow-x: hidden;
+  overscroll-behavior-y: none; /* Prevents pull-to-refresh on PWA wrapper */
 }
 
 /* Accessible & Fluid Scrollbars */
@@ -69,7 +70,6 @@ body {
 @layer utilities {
   .glass-panel {
     @apply bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl;
-    /* Hardware acceleration for backdrop filters */
     transform: translateZ(0); 
   }
   
@@ -80,5 +80,16 @@ body {
 
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#0a0a0a] transition-shadow;
+  }
+
+  /* Critical for iOS / PWA native feel */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top), 0.5rem);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom);
   }
 }
