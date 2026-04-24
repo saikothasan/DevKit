@@ -18,6 +18,8 @@ interface AuthState {
   isLoading: boolean;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  login: (e: string, p: string, t: string) => Promise<void>;
+  register: (u: string, e: string, p: string, t: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -39,6 +41,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const login = async (email: string, password: string, turnstileToken: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, turnstileToken })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    await refreshUser();
+  };
+
+  const register = async (username: string, email: string, password: string, turnstileToken: string) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password, turnstileToken })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    if (!data.requiresVerification) {
+      await refreshUser();
+    }
+    return data;
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
@@ -48,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshUser(); }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, refreshUser, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, refreshUser, logout, login, register }}>
       {children}
     </AuthContext.Provider>
   );
