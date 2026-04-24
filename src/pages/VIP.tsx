@@ -4,7 +4,7 @@ import { Crown, CheckCircle2, Shield, Zap, LockOpen, Server, ArrowRight, Loader2
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/utils/apiClient';
 
-export function VIP() {
+export default function VIP() {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);
