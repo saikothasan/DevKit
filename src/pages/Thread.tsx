@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Lock, Unlock, Zap, Eye, MessageSquare, ShieldAlert, 
-  User, Flame, Clock, Loader2, ChevronLeft, Send 
+  User, Flame, Clock, Loader2, ChevronLeft, Send, Trash2, MoreVertical
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/utils/apiClient';
 import { cn } from '@/utils/cn';
+import { formatDistanceToNow } from 'date-fns';
 
 export function Thread() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
@@ -25,23 +29,19 @@ export function Thread() {
     retry: 1
   });
 
-  // Cryptographic Payload Unlock Mutation
   const unlockMutation = useMutation({
     mutationFn: () => api.post(`/forum/threads/${id}/unlock`),
     onMutate: () => setIsDecrypting(true),
     onSuccess: async (data) => {
-      // Optimistic cache injection
       queryClient.setQueryData(['thread', id], (old: any) => ({
         ...old, 
         lockedContent: data.lockedContent 
       }));
-      // Sync global user state to reflect point deduction
       await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onSettled: () => setIsDecrypting(false)
   });
 
-  // Reply Transmission Mutation
   const replyMutation = useMutation({
     mutationFn: (content: string) => api.post(`/forum/threads/${id}/replies`, { content }),
     onSuccess: () => {
@@ -50,7 +50,6 @@ export function Thread() {
     }
   });
 
-  // Reputation Execution (Upvote) Mutation with Optimistic UI
   const voteMutation = useMutation({
     mutationFn: ({ type, targetId }: { type: 'thread' | 'reply', targetId: number }) => 
       api.post(`/forum/vote/${type}/${targetId}`),
@@ -74,9 +73,18 @@ export function Thread() {
     onError: (err, variables, context: any) => {
       queryClient.setQueryData(['thread', id], context.previousData);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['thread', id] });
-    }
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['thread', id] })
+  });
+
+  // Moderation Vectors
+  const deleteThreadMutation = useMutation({
+    mutationFn: () => api.delete(`/forum/threads/${id}`),
+    onSuccess: () => navigate('/forum')
+  });
+
+  const deleteReplyMutation = useMutation({
+    mutationFn: (replyId: number) => api.delete(`/forum/replies/${replyId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['thread', id] })
   });
 
   if (isLoading) {
@@ -102,12 +110,25 @@ export function Thread() {
     );
   }
 
+  const isAuthorOrAdmin = user && (user.id === thread.authorId || user.role === 'admin' || user.role === 'moderator');
+
   return (
     <div className="max-w-4xl mx-auto w-full space-y-8 pb-12">
-      {/* Navigation Breadcrumb */}
-      <Link to="/forum" className="inline-flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-orange-500 transition-colors focus-ring rounded-lg px-2 py-1 -ml-2">
-        <ChevronLeft className="size-4" /> Back to Operations
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link to="/forum" className="inline-flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-orange-500 transition-colors focus-ring rounded-lg px-2 py-1 -ml-2">
+          <ChevronLeft className="size-4" /> Back to Operations
+        </Link>
+
+        {isAuthorOrAdmin && (
+          <button 
+            onClick={() => { if(window.confirm('Eradicate this thread permanently?')) deleteThreadMutation.mutate(); }}
+            disabled={deleteThreadMutation.isPending}
+            className="text-xs font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 focus-ring"
+          >
+            <Trash2 className="size-3.5" /> Eradicate Vector
+          </button>
+        )}
+      </div>
 
       {/* Primary Payload Viewer */}
       <article className="glass-panel rounded-3xl p-6 md:p-8 relative overflow-hidden">
@@ -120,7 +141,7 @@ export function Thread() {
             </span>
             <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400">
               <span className="flex items-center gap-1.5"><Eye className="size-3.5" /> {thread.views} Executions</span>
-              <span className="flex items-center gap-1.5"><Clock className="size-3.5" /> {new Date(thread.createdAt).toLocaleDateString()}</span>
+              <span className="flex items-center gap-1.5"><Clock className="size-3.5" /> {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
             </div>
           </div>
 
@@ -128,14 +149,14 @@ export function Thread() {
             {thread.title}
           </h1>
           
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 shadow-inner">
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 shadow-inner overflow-hidden">
             <div className="flex items-center gap-3">
-              <div className="size-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-300 dark:border-zinc-700">
+              <div className="size-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-300 dark:border-zinc-700 shrink-0">
                 <User className="size-5" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col truncate pr-2">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Transmitted By</span>
-                <Link to={`/profile/${thread.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors">
+                <Link to={`/profile/${thread.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors truncate">
                   {thread.author}
                 </Link>
               </div>
@@ -144,7 +165,7 @@ export function Thread() {
             <button 
               onClick={() => voteMutation.mutate({ type: 'thread', targetId: thread.id })}
               disabled={!user || user.id === thread.authorId}
-              className="flex items-center gap-2 bg-white dark:bg-[#1c1c1c] hover:bg-orange-500/10 hover:text-orange-500 hover:border-orange-500/30 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm focus-ring disabled:opacity-50 disabled:pointer-events-none group"
+              className="flex items-center gap-2 bg-white dark:bg-[#1c1c1c] hover:bg-orange-500/10 hover:text-orange-500 hover:border-orange-500/30 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm focus-ring disabled:opacity-50 disabled:pointer-events-none group shrink-0"
             >
               <Flame className={cn("size-4", thread.upvotes > 0 ? "text-amber-500" : "text-zinc-400 group-hover:text-orange-500")} /> 
               {thread.upvotes}
@@ -152,8 +173,11 @@ export function Thread() {
           </div>
         </header>
         
-        <div className="prose prose-zinc dark:prose-invert max-w-none mb-10 text-zinc-700 dark:text-zinc-300 leading-relaxed text-[15px] whitespace-pre-wrap">
-          {thread.content}
+        {/* Render Markdown Payload */}
+        <div className="prose prose-zinc dark:prose-invert max-w-none mb-10 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-a:text-orange-500 hover:prose-a:text-orange-600 break-words">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {thread.content}
+          </ReactMarkdown>
         </div>
 
         {/* Cryptographic Execution Vector (Locked Content Logic) */}
@@ -167,12 +191,14 @@ export function Thread() {
                 <div className="flex items-center gap-2 text-green-400 font-bold text-sm uppercase tracking-wider mb-4 relative z-10">
                   <ShieldAlert className="size-4" /> Decrypted Payload
                 </div>
-                <div className="text-zinc-300 font-mono text-sm leading-relaxed relative z-10 whitespace-pre-wrap bg-black/40 p-4 rounded-xl border border-zinc-800/80">
-                  {thread.lockedContent}
+                <div className="prose prose-invert max-w-none relative z-10 bg-black/40 p-5 rounded-xl border border-zinc-800/80 prose-pre:bg-transparent prose-pre:border-0 prose-pre:p-0">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {thread.lockedContent}
+                  </ReactMarkdown>
                 </div>
               </motion.div>
             ) : (
-              <div className="bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-2xl p-8 text-center relative overflow-hidden shadow-2xl group">
+              <div className="bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-2xl p-6 md:p-8 text-center relative overflow-hidden shadow-2xl group">
                 <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
                 <div className="absolute -top-12 -right-12 size-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-orange-500/20 transition-colors duration-700" />
                 
@@ -189,13 +215,13 @@ export function Thread() {
                     <button 
                       onClick={() => unlockMutation.mutate()}
                       disabled={isDecrypting || user.points < thread.unlockCost}
-                      className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(243,128,32,0.3)] active:scale-95 disabled:opacity-50 disabled:grayscale focus-ring flex items-center gap-2"
+                      className="w-full sm:w-auto bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(243,128,32,0.3)] active:scale-95 disabled:opacity-50 disabled:grayscale focus-ring flex items-center justify-center gap-2"
                     >
                       {isDecrypting ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4 fill-white/20" />}
                       Execute Decryption (-{thread.unlockCost} pts)
                     </button>
                   ) : (
-                    <Link to="/login" className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors focus-ring">
+                    <Link to="/login" className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors focus-ring">
                       <Lock className="size-4" /> Authentication Required to Decrypt
                     </Link>
                   )}
@@ -218,7 +244,6 @@ export function Thread() {
           <h3 className="text-xl font-black text-zinc-900 dark:text-white">Execution Logs ({thread.meta?.totalReplies || 0})</h3>
         </div>
 
-        {/* Reply Submission Node */}
         {user ? (
           <form 
             onSubmit={(e) => { e.preventDefault(); if (replyContent.trim()) replyMutation.mutate(replyContent); }}
@@ -228,11 +253,12 @@ export function Thread() {
               <textarea
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
-                placeholder="Initialize response sequence..."
-                className="w-full min-h-[120px] bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 text-sm focus-ring text-zinc-900 dark:text-zinc-100 transition-all custom-scrollbar resize-y"
+                placeholder="Initialize markdown response sequence... (Supports codeblocks, formatting)"
+                className="w-full min-h-[140px] bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 pb-14 text-sm focus-ring text-zinc-900 dark:text-zinc-100 transition-all custom-scrollbar resize-y"
                 required
               />
-              <div className="absolute bottom-4 right-4">
+              <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-semibold hidden sm:inline-block mr-2">Markdown Supported</span>
                 <button 
                   type="submit" 
                   disabled={replyMutation.isPending || !replyContent.trim()}
@@ -255,43 +281,63 @@ export function Thread() {
         {/* Reply Grid Execution */}
         <div className="space-y-4">
           <AnimatePresence initial={false}>
-            {thread.replies?.map((reply: any) => (
-              <motion.div 
-                key={reply.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800/80 p-5 md:p-6 rounded-3xl shadow-sm"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-200 dark:border-zinc-700">
-                      <User className="size-4" />
+            {thread.replies?.map((reply: any) => {
+              const isReplyAuthorOrAdmin = user && (user.id === reply.authorId || user.role === 'admin' || user.role === 'moderator');
+              
+              return (
+                <motion.div 
+                  key={reply.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800/80 p-5 md:p-6 rounded-3xl shadow-sm"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-200 dark:border-zinc-700 shrink-0">
+                        <User className="size-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <Link to={`/profile/${reply.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors">
+                          {reply.author}
+                        </Link>
+                        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <Link to={`/profile/${reply.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors">
-                        {reply.author}
-                      </Link>
-                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                        {new Date(reply.createdAt).toLocaleDateString()}
-                      </span>
+                    
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => voteMutation.mutate({ type: 'reply', targetId: reply.id })}
+                        disabled={!user || user.id === reply.authorId}
+                        className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-orange-500 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-orange-500/10 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors focus-ring disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        <Flame className={cn("size-3", reply.upvotes > 0 ? "text-amber-500" : "")} /> 
+                        {reply.upvotes}
+                      </button>
+                      
+                      {isReplyAuthorOrAdmin && (
+                        <button
+                          onClick={() => { if(window.confirm('Delete reply?')) deleteReplyMutation.mutate(reply.id); }}
+                          disabled={deleteReplyMutation.isPending}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors focus-ring"
+                          title="Delete Reply"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   
-                  <button 
-                    onClick={() => voteMutation.mutate({ type: 'reply', targetId: reply.id })}
-                    disabled={!user || user.id === reply.authorId}
-                    className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-orange-500 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-orange-500/10 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors focus-ring disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <Flame className={cn("size-3", reply.upvotes > 0 ? "text-amber-500" : "")} /> 
-                    {reply.upvotes}
-                  </button>
-                </div>
-                
-                <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                  {reply.content}
-                </div>
-              </motion.div>
-            ))}
+                  <div className="prose prose-sm prose-zinc dark:prose-invert max-w-none prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 break-words">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {reply.content}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
           
           {thread.replies?.length === 0 && (
