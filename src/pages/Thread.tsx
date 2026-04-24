@@ -1,353 +1,359 @@
-import { useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, User, Clock, MessageCircle, Send, Flame, Bold, Italic, Code, Pin, LockKeyhole, Trash2, ShieldAlert, Hash, Eye, Crown, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  Lock, Unlock, Zap, Eye, MessageSquare, ShieldAlert, 
-  User, Flame, Clock, Loader2, ChevronLeft, Send, Trash2, MoreVertical
-} from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import { api } from '@/utils/apiClient';
-import { cn } from '@/utils/cn';
-import { formatDistanceToNow } from 'date-fns';
+import { SeoHead } from '../components/SeoHead';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
-export function Thread() {
-  const { id } = useParams<{ id: string }>();
+const formatCategory = (cat: string) => {
+  const mappings: Record<string, string> = {
+    'all': 'All', 'bin-list': 'BIN List', 'vcc': 'VCC', 'bins': 'BINS', 'redeem-coupons-keys': 'Redeem / Coupons / Keys'
+  };
+  return mappings[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
+};
+
+type Reply = { id: number; content: string; author: string; authorId: number; upvotes: number; createdAt: string; };
+type ThreadDetail = { 
+  id: number; title: string; content: string; category: string; author: string; authorId: number; 
+  upvotes: number; views: number; isPinned: boolean; isLocked: boolean; createdAt: string; 
+  hasLockedContent?: boolean; lockedContent?: string; unlockCost?: number;
+  replies: Reply[]; 
+};
+
+export default function Thread() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  
+  const { user, refreshUser } = useAuth();
+  const { toast } = useToast();
+  const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [replyContent, setReplyContent] = useState('');
-  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Core Data Vector Retrieval
-  const { data: thread, isLoading, isError } = useQuery({
-    queryKey: ['thread', id],
-    queryFn: () => api.get(`/forum/threads/${id}`).then(res => res.json()),
-    retry: 1
-  });
+  const isModerator = user?.role === 'admin' || user?.role === 'moderator';
+  const isAuthor = user?.username === thread?.author;
+  const isVipBypass = user?.isVip === true;
 
-  const unlockMutation = useMutation({
-    mutationFn: () => api.post(`/forum/threads/${id}/unlock`),
-    onMutate: () => setIsDecrypting(true),
-    onSuccess: async (data) => {
-      queryClient.setQueryData(['thread', id], (old: any) => ({
-        ...old, 
-        lockedContent: data.lockedContent 
-      }));
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
-    },
-    onSettled: () => setIsDecrypting(false)
-  });
+  const fetchThread = () => {
+    fetch(`/api/forum/threads/${id}`)
+      .then(res => res.json() as Promise<ThreadDetail & { error?: string }>)
+      .then(data => { if (!data.error) setThread(data as ThreadDetail); })
+      .catch(() => toast('Vector decryption failed.', 'error'));
+  };
 
-  const replyMutation = useMutation({
-    mutationFn: (content: string) => api.post(`/forum/threads/${id}/replies`, { content }),
-    onSuccess: () => {
-      setReplyContent('');
-      queryClient.invalidateQueries({ queryKey: ['thread', id] });
+  useEffect(() => { fetchThread(); }, [id]);
+
+  const handleVote = async (type: 'thread' | 'reply', targetId: number) => {
+    if (!thread) return;
+    if (!user) return toast("Authentication required for reputation assignment.", "error");
+    
+    // Optimistic UI Update
+    const originalThread = { ...thread };
+    if (type === 'thread') {
+        setThread({ ...thread, upvotes: thread.upvotes + 1 });
+    } else {
+        setThread({ ...thread, replies: thread.replies.map(r => r.id === targetId ? { ...r, upvotes: r.upvotes + 1 } : r) });
     }
-  });
 
-  const voteMutation = useMutation({
-    mutationFn: ({ type, targetId }: { type: 'thread' | 'reply', targetId: number }) => 
-      api.post(`/forum/vote/${type}/${targetId}`),
-    onMutate: async ({ type, targetId }) => {
-      await queryClient.cancelQueries({ queryKey: ['thread', id] });
-      const previousData = queryClient.getQueryData(['thread', id]);
+    const res = await fetch(`/api/forum/vote/${type}/${targetId}`, { method: 'POST' });
+    if (!res.ok) {
+        setThread(originalThread); // Rollback
+        const errorData = await res.json() as any;
+        toast(errorData.error || "Execution failed.", "error");
+    }
+  };
 
-      queryClient.setQueryData(['thread', id], (old: any) => {
-        if (!old) return old;
-        if (type === 'thread') {
-          return { ...old, upvotes: old.upvotes + 1 };
-        } else {
-          return {
-            ...old,
-            replies: old.replies.map((r: any) => r.id === targetId ? { ...r, upvotes: r.upvotes + 1 } : r)
-          };
-        }
+  const handleModeration = async (action: 'pin' | 'lock' | 'delete') => {
+    if (!thread) return;
+    if (action === 'delete') {
+      if (!confirm('Confirm permanent sanitization of this vector?')) return;
+      await fetch(`/api/forum/threads/${thread.id}`, { method: 'DELETE' });
+      toast('Vector deleted.', 'success');
+      navigate('/');
+      return;
+    }
+
+    const res = await fetch(`/api/forum/threads/${thread.id}/${action}`, { method: 'PATCH' });
+    if (res.ok) {
+      const updated = await res.json() as ThreadDetail;
+      setThread({ ...thread, isPinned: updated.isPinned, isLocked: updated.isLocked });
+    }
+  };
+
+  const handleDeleteReply = async (replyId: number) => {
+    if (!confirm('Permanently wipe this transmission?')) return;
+    const res = await fetch(`/api/forum/replies/${replyId}`, { method: 'DELETE' });
+    if (res.ok && thread) {
+      setThread({ ...thread, replies: thread.replies.filter(r => r.id !== replyId) });
+      toast('Transmission wiped.', 'success');
+    }
+  };
+
+  const handleUnlock = async () => {
+    if (!thread) return;
+    setIsUnlocking(true);
+    try {
+      const res = await fetch(`/api/forum/threads/${thread.id}/unlock`, { method: 'POST' });
+      const data = await res.json() as any;
+      if (res.ok && data.success) {
+        setThread({ ...thread, lockedContent: data.lockedContent });
+        await refreshUser();
+        toast('Payload decrypted successfully.', 'success');
+      } else toast(data.error || 'Decryption sequence failed.', 'error');
+    } catch (err) {
+      toast('Network disruption detected.', 'error');
+    } finally { setIsUnlocking(false); }
+  };
+
+  const insertFormatting = (prefix: string, suffix: string) => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const text = replyContent;
+    const selected = text.substring(start, end) || 'payload';
+    const newText = text.substring(0, start) + prefix + selected + suffix + text.substring(end);
+    setReplyContent(newText);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }, 0);
+  };
+
+  const handleReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !replyContent.trim()) return;
+    setIsReplying(true);
+    try {
+      const res = await fetch(`/api/forum/threads/${id}/replies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: replyContent })
       });
-      return { previousData };
-    },
-    onError: (err, variables, context: any) => {
-      queryClient.setQueryData(['thread', id], context.previousData);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['thread', id] })
-  });
+      if (res.ok) {
+         setReplyContent('');
+         fetchThread();
+         toast('Transmission successful.', 'success');
+      } else {
+         toast('Transmission restricted.', 'error');
+      }
+    } finally { setIsReplying(false); }
+  };
 
-  // Moderation Vectors
-  const deleteThreadMutation = useMutation({
-    mutationFn: () => api.delete(`/forum/threads/${id}`),
-    onSuccess: () => navigate('/forum')
-  });
+  // SEO Structured Data Injection
+  const jsonLd = thread ? {
+    "@context": "https://schema.org",
+    "@type": "DiscussionForumPosting",
+    "headline": thread.title,
+    "author": { "@type": "Person", "name": thread.author },
+    "datePublished": thread.createdAt,
+    "interactionStatistic": {
+      "@type": "InteractionCounter",
+      "interactionType": "https://schema.org/ReplyAction",
+      "userInteractionCount": thread.replies.length
+    }
+  } : null;
 
-  const deleteReplyMutation = useMutation({
-    mutationFn: (replyId: number) => api.delete(`/forum/replies/${replyId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['thread', id] })
-  });
-
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto w-full space-y-6 animate-pulse">
-        <div className="h-10 w-32 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-        <div className="h-64 bg-zinc-200 dark:bg-zinc-800/50 rounded-3xl" />
-        <div className="h-32 bg-zinc-200 dark:bg-zinc-800/50 rounded-3xl" />
+  if (!thread) return (
+    <div className="max-w-4xl mx-auto py-16 px-4 flex flex-col items-center animate-pulse">
+      <div className="h-6 w-32 bg-zinc-200 dark:bg-zinc-800 rounded-lg mb-8 self-start"></div>
+      <div className="w-full bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-sm">
+        <div className="flex gap-4 mb-6"><div className="h-4 w-16 bg-zinc-200 dark:bg-zinc-800 rounded"></div><div className="h-4 w-24 bg-zinc-200 dark:bg-zinc-800 rounded"></div></div>
+        <div className="h-10 w-3/4 bg-zinc-200 dark:bg-zinc-800 rounded-xl mb-8"></div>
+        <div className="space-y-4"><div className="h-4 w-full bg-zinc-200 dark:bg-zinc-800 rounded"></div><div className="h-4 w-full bg-zinc-200 dark:bg-zinc-800 rounded"></div><div className="h-4 w-2/3 bg-zinc-200 dark:bg-zinc-800 rounded"></div></div>
       </div>
-    );
-  }
-
-  if (isError || !thread) {
-    return (
-      <div className="max-w-4xl mx-auto text-center py-20 glass-panel rounded-3xl">
-        <ShieldAlert className="size-16 text-red-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-2">Vector Untraceable</h2>
-        <p className="text-zinc-500">The requested thread has been redacted or does not exist.</p>
-        <Link to="/forum" className="mt-6 inline-block bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold px-6 py-2.5 rounded-xl transition-all hover:bg-orange-500 dark:hover:bg-orange-500">
-          Return to Grid
-        </Link>
-      </div>
-    );
-  }
-
-  const isAuthorOrAdmin = user && (user.id === thread.authorId || user.role === 'admin' || user.role === 'moderator');
+    </div>
+  );
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-8 pb-12">
-      <div className="flex items-center justify-between">
-        <Link to="/forum" className="inline-flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-orange-500 transition-colors focus-ring rounded-lg px-2 py-1 -ml-2">
-          <ChevronLeft className="size-4" /> Back to Operations
+    <div className="max-w-4xl mx-auto md:py-8 animation-fade-in">
+      <SeoHead title={thread.title} description={thread.content.substring(0, 160)} />
+      {jsonLd && <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>}
+      
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm transition-all w-fit">
+          <ArrowLeft className="size-4" /> Terminate Link
         </Link>
-
-        {isAuthorOrAdmin && (
-          <button 
-            onClick={() => { if(window.confirm('Eradicate this thread permanently?')) deleteThreadMutation.mutate(); }}
-            disabled={deleteThreadMutation.isPending}
-            className="text-xs font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 focus-ring"
-          >
-            <Trash2 className="size-3.5" /> Eradicate Vector
-          </button>
+        
+        {(isModerator || isAuthor) && (
+          <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-900 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            {isModerator && (
+              <>
+                <button onClick={() => handleModeration('pin')} className={`p-2 rounded-lg transition-colors ${thread.isPinned ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`} title="Toggle Pin">
+                  <Pin className="size-4" />
+                </button>
+                <button onClick={() => handleModeration('lock')} className={`p-2 rounded-lg transition-colors ${thread.isLocked ? 'bg-red-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`} title="Toggle Lock">
+                  <LockKeyhole className="size-4" />
+                </button>
+              </>
+            )}
+            <button onClick={() => handleModeration('delete')} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors ml-1" title="Delete Vector">
+              <Trash2 className="size-4" />
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Primary Payload Viewer */}
-      <article className="glass-panel rounded-3xl p-6 md:p-8 relative overflow-hidden">
-        {thread.isPinned && <div className="absolute top-0 right-0 border-t-[40px] border-r-[40px] border-t-red-500/20 border-r-transparent" />}
-        
-        <header className="mb-8">
-          <div className="flex flex-wrap items-center gap-3 mb-6">
-            <span className="px-3 py-1 bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[10px] font-bold uppercase tracking-widest rounded-md border border-orange-500/20 shadow-sm">
-              {thread.category}
-            </span>
-            <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400">
-              <span className="flex items-center gap-1.5"><Eye className="size-3.5" /> {thread.views} Executions</span>
-              <span className="flex items-center gap-1.5"><Clock className="size-3.5" /> {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
-            </div>
-          </div>
-
-          <h1 className="text-3xl md:text-4xl font-black text-zinc-900 dark:text-white tracking-tight mb-6 leading-tight">
-            {thread.title}
-          </h1>
-          
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 shadow-inner overflow-hidden">
-            <div className="flex items-center gap-3">
-              <div className="size-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-300 dark:border-zinc-700 shrink-0">
-                <User className="size-5" />
-              </div>
-              <div className="flex flex-col truncate pr-2">
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Transmitted By</span>
-                <Link to={`/profile/${thread.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors truncate">
-                  {thread.author}
-                </Link>
-              </div>
-            </div>
-            
-            <button 
-              onClick={() => voteMutation.mutate({ type: 'thread', targetId: thread.id })}
-              disabled={!user || user.id === thread.authorId}
-              className="flex items-center gap-2 bg-white dark:bg-[#1c1c1c] hover:bg-orange-500/10 hover:text-orange-500 hover:border-orange-500/30 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm focus-ring disabled:opacity-50 disabled:pointer-events-none group shrink-0"
-            >
-              <Flame className={cn("size-4", thread.upvotes > 0 ? "text-amber-500" : "text-zinc-400 group-hover:text-orange-500")} /> 
-              {thread.upvotes}
-            </button>
-          </div>
-        </header>
-        
-        {/* Render Markdown Payload */}
-        <div className="prose prose-zinc dark:prose-invert max-w-none mb-10 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-a:text-orange-500 hover:prose-a:text-orange-600 break-words">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {thread.content}
-          </ReactMarkdown>
+      <div className={`bg-white dark:bg-[#0a0a0a] border rounded-3xl p-6 md:p-10 shadow-xl shadow-zinc-200/20 dark:shadow-black/20 mb-8 flex gap-6 md:gap-8 ${thread.isPinned ? 'border-orange-500/50' : 'border-zinc-200 dark:border-zinc-800'}`}>
+        <div className="hidden sm:flex flex-col items-center gap-3 pt-2">
+          <button onClick={() => handleVote('thread', thread.id)} className="p-3 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all cursor-pointer border border-transparent hover:border-orange-500/20 active:scale-90">
+            <Flame className="size-6" />
+          </button>
+          <span className="font-black text-xl text-zinc-900 dark:text-zinc-100">{thread.upvotes}</span>
         </div>
 
-        {/* Cryptographic Execution Vector (Locked Content Logic) */}
-        {thread.hasLockedContent && (
-          <div className="mt-8 border-t border-zinc-200 dark:border-zinc-800 pt-8">
-            {thread.lockedContent ? (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#141414] border border-green-500/30 rounded-2xl p-6 relative overflow-hidden shadow-[0_4px_30px_rgba(34,197,94,0.1)] group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity duration-500 transform group-hover:scale-110">
-                  <Unlock className="size-24 text-green-500" />
-                </div>
-                <div className="flex items-center gap-2 text-green-400 font-bold text-sm uppercase tracking-wider mb-4 relative z-10">
-                  <ShieldAlert className="size-4" /> Decrypted Payload
-                </div>
-                <div className="prose prose-invert max-w-none relative z-10 bg-black/40 p-5 rounded-xl border border-zinc-800/80 prose-pre:bg-transparent prose-pre:border-0 prose-pre:p-0">
-                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {thread.lockedContent}
-                  </ReactMarkdown>
-                </div>
-              </motion.div>
-            ) : (
-              <div className="bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-2xl p-6 md:p-8 text-center relative overflow-hidden shadow-2xl group">
-                <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
-                <div className="absolute -top-12 -right-12 size-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-orange-500/20 transition-colors duration-700" />
-                
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="size-16 bg-zinc-800/80 rounded-2xl flex items-center justify-center border border-zinc-700/50 mb-5 shadow-inner">
-                    <Lock className="size-8 text-orange-500 drop-shadow-[0_0_12px_rgba(243,128,32,0.6)]" />
+        <div className="flex-1 w-full overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2.5 mb-5">
+             {thread.isPinned && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20"><Pin className="size-3" /> Pinned</span>}
+             {thread.isLocked && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20"><LockKeyhole className="size-3" /> Locked</span>}
+             {thread.hasLockedContent && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20"><LockKeyhole className="size-3" /> Encrypted Payload</span>}
+             <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 text-[10px] font-bold uppercase tracking-wider rounded-md flex items-center gap-1 shadow-sm">
+               <Hash className="size-3" /> {formatCategory(thread.category)}
+             </span>
+          </div>
+          
+          <h1 className="text-3xl md:text-4xl font-extrabold mb-6 text-balance leading-tight text-zinc-900 dark:text-white">{thread.title}</h1>
+          
+          <div className="prose prose-zinc dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-zinc-50 dark:prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-200 dark:prose-pre:border-zinc-800 prose-pre:rounded-xl">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{thread.content}</ReactMarkdown>
+          </div>
+          
+          {thread.hasLockedContent && (
+            <div className="mt-10 border border-orange-500/30 bg-orange-50/50 dark:bg-orange-500/5 rounded-2xl p-6 md:p-8 relative overflow-hidden shadow-inner">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-500 to-amber-400"></div>
+              {thread.lockedContent ? (
+                <div className="animation-fade-in">
+                  <h4 className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <LockKeyhole className="size-4" /> Decrypted Sequence
+                  </h4>
+                  <div className="bg-white dark:bg-[#0a0a0a] p-5 rounded-xl border border-orange-500/30 overflow-x-auto shadow-sm">
+                    <pre className="text-zinc-800 dark:text-zinc-200 font-mono text-sm whitespace-pre-wrap break-all m-0">{thread.lockedContent}</pre>
                   </div>
-                  <h3 className="text-white font-black text-xl tracking-tight mb-2">Encrypted Telemetry Present</h3>
-                  <p className="text-zinc-400 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-                    Execution requires reputation expenditure. 80% of cryptographic points are automatically transferred to the author node.
-                  </p>
-                  
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="text-center sm:text-left">
+                    <h4 className="font-bold text-xl text-zinc-900 dark:text-white flex items-center justify-center sm:justify-start gap-2 mb-2"><LockKeyhole className="size-6 text-orange-500" /> Vector Encrypted</h4>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">Reputation points required for payload decryption.</p>
+                  </div>
                   {user ? (
-                    <button 
-                      onClick={() => unlockMutation.mutate()}
-                      disabled={isDecrypting || user.points < thread.unlockCost}
-                      className="w-full sm:w-auto bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(243,128,32,0.3)] active:scale-95 disabled:opacity-50 disabled:grayscale focus-ring flex items-center justify-center gap-2"
-                    >
-                      {isDecrypting ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4 fill-white/20" />}
-                      Execute Decryption (-{thread.unlockCost} pts)
+                    <button onClick={handleUnlock} disabled={isUnlocking} className="shrink-0 flex w-full sm:w-auto items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl active:scale-[0.98] cursor-pointer disabled:opacity-50">
+                      {isUnlocking ? <Loader2 className="size-5 animate-spin" /> : isVipBypass ? <><Crown className="size-5 text-orange-400" /> VIP Bypass (Free)</> : `Decrypt (${thread.unlockCost} pts)`}
                     </button>
                   ) : (
-                    <Link to="/login" className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors focus-ring">
-                      <Lock className="size-4" /> Authentication Required to Decrypt
+                    <Link to="/login" className="shrink-0 flex w-full sm:w-auto items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl active:scale-[0.98]">
+                      Authenticate to Decrypt
                     </Link>
                   )}
-                  {user && user.points < thread.unlockCost && (
-                    <p className="text-red-400 text-xs mt-4 font-semibold bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
-                      Insufficient points (You have {user.points} pts)
-                    </p>
-                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
+          <div className="mt-10 pt-6 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-4">
+            <Link to={`/profile/${thread.author}`} className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors px-4 py-2 rounded-xl group shadow-sm">
+              <div className="size-8 rounded-full bg-orange-500/10 flex items-center justify-center"><User className="size-4 text-orange-500 group-hover:scale-110 transition-transform" /></div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider leading-none mb-1">Author Entity</span>
+                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-orange-500 transition-colors leading-none">{thread.author}</span>
+              </div>
+            </Link>
+            <div className="flex items-center gap-4 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5"><Clock className="size-4" /> {new Date(thread.createdAt).toLocaleString()}</span>
+              <span className="flex items-center gap-1.5"><Eye className="size-4" /> {thread.views} Executions</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12">
+        <div className="flex items-center justify-between mb-6 px-2">
+          <h3 className="font-extrabold text-2xl flex items-center gap-3 text-zinc-900 dark:text-white">
+            <MessageCircle className="size-6 text-orange-500" /> 
+            Network Responses <span className="text-zinc-400 font-medium text-lg">({thread.replies.length})</span>
+          </h3>
+        </div>
+        
+        <div className="space-y-4">
+          {thread.replies.length === 0 ? (
+            <div className="bg-white/50 dark:bg-[#0a0a0a]/50 border border-zinc-200 dark:border-zinc-800 border-dashed rounded-3xl p-12 text-center text-zinc-500 shadow-sm">
+              <MessageCircle className="size-10 mx-auto mb-3 opacity-20" />
+              <p className="font-semibold text-zinc-600 dark:text-zinc-400">Zero response nodes detected.</p>
+            </div>
+          ) : (
+            thread.replies.map(reply => (
+              <div key={reply.id} className="relative bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 md:p-8 ml-0 md:ml-12 flex flex-col sm:flex-row gap-6 transition-all hover:border-orange-500/30 hover:shadow-md">
+                {(isModerator || user?.id === reply.authorId) && (
+                  <button onClick={() => handleDeleteReply(reply.id)} className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+                <div className="flex sm:flex-col items-center justify-between sm:justify-start gap-4 sm:gap-2 shrink-0 border-b sm:border-b-0 sm:border-r border-zinc-100 dark:border-zinc-800 pb-4 sm:pb-0 sm:pr-6">
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={() => handleVote('reply', reply.id)} className="p-2 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-orange-500/20 active:scale-90"><Flame className="size-5" /></button>
+                    <span className="font-black text-lg text-zinc-900 dark:text-white">{reply.upvotes}</span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <div className="flex items-center gap-4 mb-4">
+                    <Link to={`/profile/${reply.author}`} className="flex items-center gap-2 group">
+                      <div className="size-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><User className="size-3 text-zinc-500 group-hover:text-orange-500 transition-colors" /></div>
+                      <span className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-orange-500 transition-colors">{reply.author}</span>
+                    </Link>
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="size-3.5" /> {new Date(reply.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="prose prose-zinc dark:prose-invert max-w-none prose-p:leading-relaxed text-sm md:text-base prose-pre:bg-zinc-50 dark:prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-200 dark:prose-pre:border-zinc-800">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{reply.content}</ReactMarkdown>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-      </article>
-
-      {/* Reply Engine Pipeline */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 px-2">
-          <MessageSquare className="size-5 text-orange-500" />
-          <h3 className="text-xl font-black text-zinc-900 dark:text-white">Execution Logs ({thread.meta?.totalReplies || 0})</h3>
-        </div>
-
-        {user ? (
-          <form 
-            onSubmit={(e) => { e.preventDefault(); if (replyContent.trim()) replyMutation.mutate(replyContent); }}
-            className="glass-panel p-4 md:p-6 rounded-3xl relative"
-          >
-            <div className="relative">
-              <textarea
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                placeholder="Initialize markdown response sequence... (Supports codeblocks, formatting)"
-                className="w-full min-h-[140px] bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 pb-14 text-sm focus-ring text-zinc-900 dark:text-zinc-100 transition-all custom-scrollbar resize-y"
-                required
-              />
-              <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                <span className="text-xs text-zinc-400 font-semibold hidden sm:inline-block mr-2">Markdown Supported</span>
-                <button 
-                  type="submit" 
-                  disabled={replyMutation.isPending || !replyContent.trim()}
-                  className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-orange-500 dark:hover:bg-orange-500 hover:text-white font-bold size-10 rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus-ring group"
-                >
-                  {replyMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />}
-                </button>
-              </div>
-            </div>
-          </form>
-        ) : (
-          <div className="glass-panel p-6 rounded-3xl text-center border-dashed">
-            <p className="text-sm font-semibold text-zinc-500 mb-3">You must be authenticated to transmit to the ledger.</p>
-            <Link to="/login" className="inline-flex bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold px-6 py-2.5 rounded-xl transition-all hover:opacity-90 focus-ring text-sm">
-              Initialize Connection
-            </Link>
-          </div>
-        )}
-
-        {/* Reply Grid Execution */}
-        <div className="space-y-4">
-          <AnimatePresence initial={false}>
-            {thread.replies?.map((reply: any) => {
-              const isReplyAuthorOrAdmin = user && (user.id === reply.authorId || user.role === 'admin' || user.role === 'moderator');
-              
-              return (
-                <motion.div 
-                  key={reply.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800/80 p-5 md:p-6 rounded-3xl shadow-sm"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 border border-zinc-200 dark:border-zinc-700 shrink-0">
-                        <User className="size-4" />
-                      </div>
-                      <div className="flex flex-col">
-                        <Link to={`/profile/${reply.author}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors">
-                          {reply.author}
-                        </Link>
-                        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => voteMutation.mutate({ type: 'reply', targetId: reply.id })}
-                        disabled={!user || user.id === reply.authorId}
-                        className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-orange-500 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-orange-500/10 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors focus-ring disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        <Flame className={cn("size-3", reply.upvotes > 0 ? "text-amber-500" : "")} /> 
-                        {reply.upvotes}
-                      </button>
-                      
-                      {isReplyAuthorOrAdmin && (
-                        <button
-                          onClick={() => { if(window.confirm('Delete reply?')) deleteReplyMutation.mutate(reply.id); }}
-                          disabled={deleteReplyMutation.isPending}
-                          className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors focus-ring"
-                          title="Delete Reply"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="prose prose-sm prose-zinc dark:prose-invert max-w-none prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 break-words">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {reply.content}
-                    </ReactMarkdown>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-          
-          {thread.replies?.length === 0 && (
-            <div className="text-center py-12">
-              <MessageSquare className="size-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-              <p className="text-zinc-500 font-semibold text-sm">No execution logs detected. Be the first to transmit.</p>
-            </div>
+            ))
           )}
         </div>
       </div>
+
+      {thread.isLocked && !isModerator ? (
+         <div className="flex flex-col items-center justify-center p-10 bg-zinc-50 dark:bg-[#0a0a0a] rounded-3xl border border-zinc-200 dark:border-zinc-800 text-center shadow-inner">
+           <div className="size-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 border border-red-500/20"><ShieldAlert className="size-8 text-red-500" /></div>
+           <h4 className="font-bold text-xl mb-2 text-zinc-900 dark:text-white">Transmission Locked</h4>
+           <p className="text-zinc-500 dark:text-zinc-400 max-w-md">The original poster has restricted append operations.</p>
+         </div>
+      ) : (
+        <div className="bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 md:p-10 shadow-xl shadow-zinc-200/20 dark:shadow-black/20 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
+          <div className="flex items-center justify-between mb-6">
+            <h4 className="font-bold text-xl flex items-center gap-2 text-zinc-900 dark:text-white">Append Transmission</h4>
+          </div>
+          {user ? (
+            <form onSubmit={handleReply} className="space-y-4">
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-50 dark:bg-zinc-900 focus-within:ring-2 focus-within:ring-orange-500/50 focus-within:border-orange-500/50 transition-all shadow-inner">
+                <div className="flex items-center gap-1.5 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-[#0a0a0a]">
+                  <button type="button" onClick={() => insertFormatting('**', '**')} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer transition-colors" title="Bold"><Bold className="size-4" /></button>
+                  <button type="button" onClick={() => insertFormatting('*', '*')} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer transition-colors" title="Italic"><Italic className="size-4" /></button>
+                  <div className="w-px h-4 bg-zinc-300 dark:bg-zinc-700 mx-1"></div>
+                  <button type="button" onClick={() => insertFormatting('`', '`')} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer transition-colors" title="Inline Code"><Code className="size-4" /></button>
+                </div>
+                <textarea ref={textareaRef} required minLength={2} rows={5} placeholder="Inject Markdown payload..." value={replyContent} onChange={e => setReplyContent(e.target.value)} className="w-full bg-transparent px-5 py-4 text-base text-zinc-900 dark:text-white outline-none resize-none placeholder:text-zinc-400 custom-scrollbar" />
+              </div>
+              <div className="flex justify-end pt-2">
+                <button disabled={isReplying || !replyContent.trim()} className="flex items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold px-8 py-4 rounded-xl transition-all disabled:opacity-50 shadow-md active:scale-[0.98] cursor-pointer">
+                  {isReplying ? <Loader2 className="size-4 animate-spin" /> : <><Send className="size-4 mr-1" /> Execute</>} 
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-inner">
+               <div className="size-12 bg-zinc-200 dark:bg-[#0a0a0a] rounded-full flex items-center justify-center mb-4"><LockKeyhole className="size-5 text-zinc-500" /></div>
+               <p className="text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-6">Authentication is mandated to write to this sector.</p>
+               <Link to="/login" className="px-8 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98]">Authenticate</Link>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
