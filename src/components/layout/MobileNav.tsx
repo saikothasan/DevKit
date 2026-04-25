@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Home, MessageCircle, Compass, ShieldCheck } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 // Dedicated mobile-only bottom tab architecture to simulate native app experience
 export function MobileNav() {
