@@ -10,7 +10,7 @@ import { requireAuth } from './auth';
 
 export type ForumEnv = {
   Bindings: { DB: D1Database; JWT_SECRET: string; };
-  Variables: { user: { id: number; username: string; role: string; exp: number; }; };
+  Variables: { user: { id: number; username: string; role: string; exp: number; isVip?: boolean }; };
 };
 
 export const forumRouter = new Hono<ForumEnv>();
@@ -61,9 +61,12 @@ forumRouter.get('/threads', async (c) => {
         isLocked: threads.isLocked, 
         createdAt: threads.createdAt,
         unlockCost: threads.unlockCost,
-        hasLockedContent: sql<boolean>`locked_content IS NOT NULL AND locked_content != ''`
+        hasLockedContent: sql<boolean>`threads.locked_content IS NOT NULL AND threads.locked_content != ''`,
+        authorIsVip: users.isVip,
+        authorRole: users.role
       })
       .from(threads)
+      .leftJoin(users, eq(threads.authorId, users.id))
       .where(whereClause)
       .orderBy(desc(threads.isPinned), desc(threads.createdAt))
       .limit(limit)
@@ -95,15 +98,49 @@ forumRouter.get('/threads/:id', async (c) => {
 
   if (isNaN(threadId)) return c.json({ error: 'Malformed identifier.' }, 400);
 
-  const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
+  const thread = await db.select({
+    id: threads.id,
+    title: threads.title,
+    content: threads.content,
+    category: threads.category,
+    author: threads.author,
+    authorId: threads.authorId,
+    upvotes: threads.upvotes,
+    views: threads.views,
+    isPinned: threads.isPinned,
+    isLocked: threads.isLocked,
+    createdAt: threads.createdAt,
+    unlockCost: threads.unlockCost,
+    lockedContent: threads.lockedContent,
+    authorIsVip: users.isVip,
+    authorRole: users.role
+  })
+  .from(threads)
+  .leftJoin(users, eq(threads.authorId, users.id))
+  .where(eq(threads.id, threadId))
+  .get();
+
   if (!thread) return c.json({ error: 'Target vector not found.' }, 404);
   
-  // Non-blocking view counter increment
   c.executionCtx.waitUntil(
     db.update(threads).set({ views: sql`${threads.views} + 1` }).where(eq(threads.id, threadId)).execute()
   );
   
-  const threadReplies = await db.select().from(replies).where(eq(replies.threadId, threadId)).orderBy(replies.createdAt).execute();
+  const threadReplies = await db.select({
+    id: replies.id,
+    content: replies.content,
+    author: replies.author,
+    authorId: replies.authorId,
+    upvotes: replies.upvotes,
+    createdAt: replies.createdAt,
+    authorIsVip: users.isVip,
+    authorRole: users.role
+  })
+  .from(replies)
+  .leftJoin(users, eq(replies.authorId, users.id))
+  .where(eq(replies.threadId, threadId))
+  .orderBy(replies.createdAt)
+  .execute();
   
   let currentUser: any = null;
   const token = getCookie(c, 'auth_token');
@@ -185,7 +222,6 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   const thread = await db.select().from(threads).where(eq(threads.id, threadId)).get();
   if (!thread || !thread.lockedContent) return c.json({ error: 'No encrypted payload found.' }, 404);
 
-  // VIP & Admin automatic bypass execution
   if (thread.authorId === user.id || user.role === 'admin' || user.isVip) {
     return c.json({ success: true, lockedContent: thread.lockedContent });
   }
@@ -198,7 +234,7 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   }
 
   try {
-    const authorReward = Math.floor(thread.unlockCost * 0.8); // 80% goes to author, 20% burned
+    const authorReward = Math.floor(thread.unlockCost * 0.8);
     await db.batch([
       db.update(users).set({ points: sql`${users.points} - ${thread.unlockCost}` }).where(eq(users.id, user.id)),
       db.update(users).set({ points: sql`${users.points} + ${authorReward}` }).where(eq(users.id, thread.authorId)),
@@ -247,11 +283,12 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
 
   try {
     if (type === 'thread') {
-      const existingVote = await db.select().from(threadVotes).where(and(eq(threadVotes.threadId, id), eq(threadVotes.userId, user.id))).get();
-      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
-
       const target = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
+      if (target.authorId === user.id) return c.json({ error: 'Self-voting protocol rejected.' }, 400);
+
+      const existingVote = await db.select().from(threadVotes).where(and(eq(threadVotes.threadId, id), eq(threadVotes.userId, user.id))).get();
+      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
 
       await db.batch([
         db.insert(threadVotes).values({ threadId: id, userId: user.id, voteType: 1 }),
@@ -259,11 +296,12 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
         db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, target.authorId)) 
       ]);
     } else {
-      const existingVote = await db.select().from(replyVotes).where(and(eq(replyVotes.replyId, id), eq(replyVotes.userId, user.id))).get();
-      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
-
       const target = await db.select({ authorId: replies.authorId }).from(replies).where(eq(replies.id, id)).get();
       if (!target) return c.json({ error: 'Target missing' }, 404);
+      if (target.authorId === user.id) return c.json({ error: 'Self-voting protocol rejected.' }, 400);
+
+      const existingVote = await db.select().from(replyVotes).where(and(eq(replyVotes.replyId, id), eq(replyVotes.userId, user.id))).get();
+      if (existingVote) return c.json({ error: 'Vote already registered' }, 400);
 
       await db.batch([
         db.insert(replyVotes).values({ replyId: id, userId: user.id, voteType: 1 }),
@@ -278,7 +316,6 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   }
 });
 
-// Moderation & Deletion Routes Remain Unchanged (Delete/Lock/Pin functionality preserved securely)
 forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
