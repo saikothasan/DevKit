@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Clock, MessageCircle, Send, Flame, Bold, Italic, Code, Pin, LockKeyhole, Trash2, ShieldAlert, Hash, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, MessageCircle, Send, Flame, Bold, Italic, Code, Pin, LockKeyhole, Trash2, ShieldAlert, Hash, Eye, Crown, Shield } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { SeoHead } from '../components/SeoHead';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 
 const formatCategory = (cat: string) => {
   if (cat === 'all') return 'All';
@@ -15,11 +16,12 @@ const formatCategory = (cat: string) => {
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 };
 
-type Reply = { id: number; content: string; author: string; authorId: number; upvotes: number; createdAt: string; };
+type Reply = { id: number; content: string; author: string; authorId: number; upvotes: number; createdAt: string; authorIsVip: boolean; authorRole: string; };
 type ThreadDetail = { 
   id: number; title: string; content: string; category: string; author: string; authorId: number; 
   upvotes: number; views: number; isPinned: boolean; isLocked: boolean; createdAt: string; 
   hasLockedContent?: boolean; lockedContent?: string; unlockCost?: number;
+  authorIsVip: boolean; authorRole: string;
   replies: Reply[]; 
 };
 
@@ -27,6 +29,7 @@ export default function Thread() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
+  const { toast } = useToast();
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -45,9 +48,10 @@ export default function Thread() {
 
   useEffect(() => { fetchThread(); }, [id]);
 
-  const handleVote = async (type: 'thread' | 'reply', targetId: number) => {
+  const handleVote = async (type: 'thread' | 'reply', targetId: number, authorId: number) => {
     if (!thread) return;
-    if (!user) return alert("Authentication required to vote.");
+    if (!user) { toast("Authentication required to vote.", "error"); return; }
+    if (user.id === authorId) { toast("Self-voting protocol is rejected.", "error"); return; }
     
     const res = await fetch(`/api/forum/vote/${type}/${targetId}`, { method: 'POST' });
     if (res.ok) {
@@ -58,7 +62,7 @@ export default function Thread() {
         }
     } else {
         const errorData = await res.json() as any;
-        alert(errorData.error || "Cannot process vote at this time.");
+        toast(errorData.error || "Cannot process vote at this time.", "error");
     }
   };
 
@@ -67,7 +71,7 @@ export default function Thread() {
     if (action === 'delete') {
       if (!confirm('Confirm permanent deletion of this thread?')) return;
       await fetch(`/api/forum/threads/${thread.id}`, { method: 'DELETE' });
-      navigate('/');
+      navigate('/forum');
       return;
     }
 
@@ -95,7 +99,8 @@ export default function Thread() {
       if (data.success) {
         setThread({ ...thread, lockedContent: data.lockedContent });
         await refreshUser();
-      } else alert(data.error || 'Decryption sequence failed.');
+        toast("Payload Decrypted Successfully.", "success");
+      } else toast(data.error || 'Decryption sequence failed.', 'error');
     } finally { setIsUnlocking(false); }
   };
 
@@ -143,7 +148,7 @@ export default function Thread() {
       <SeoHead title={thread.title} description={thread.content.substring(0, 150)} />
       
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm transition-all w-fit">
+        <Link to="/forum" className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm transition-all w-fit">
           <ArrowLeft className="size-4" /> Back to Board
         </Link>
         
@@ -151,24 +156,24 @@ export default function Thread() {
           <div className="flex items-center gap-2 bg-zinc-100 dark:bg-[#0a0a0a] p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
             {isModerator && (
               <>
-                <button onClick={() => handleModeration('pin')} className={`p-2 rounded-lg transition-colors ${thread.isPinned ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`}>
+                <button onClick={() => handleModeration('pin')} className={`p-2 rounded-lg transition-colors cursor-pointer ${thread.isPinned ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`}>
                   <Pin className="size-4" />
                 </button>
-                <button onClick={() => handleModeration('lock')} className={`p-2 rounded-lg transition-colors ${thread.isLocked ? 'bg-red-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`}>
+                <button onClick={() => handleModeration('lock')} className={`p-2 rounded-lg transition-colors cursor-pointer ${thread.isLocked ? 'bg-red-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-zinc-800'}`}>
                   <LockKeyhole className="size-4" />
                 </button>
               </>
             )}
-            <button onClick={() => handleModeration('delete')} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors ml-1">
+            <button onClick={() => handleModeration('delete')} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors ml-1 cursor-pointer">
               <Trash2 className="size-4" />
             </button>
           </div>
         )}
       </div>
 
-      <div className={`bg-white dark:bg-zinc-900 border rounded-3xl p-6 md:p-10 shadow-xl shadow-zinc-200/20 dark:shadow-black/20 mb-8 flex gap-6 md:gap-8 ${thread.isPinned ? 'border-orange-500/50' : 'border-zinc-200 dark:border-zinc-800'}`}>
+      <div className={`bg-white dark:bg-zinc-900 border rounded-3xl p-6 md:p-10 shadow-xl shadow-zinc-200/20 dark:shadow-black/20 mb-8 flex gap-6 md:gap-8 ${thread.isPinned ? 'border-orange-500/50' : thread.authorIsVip ? 'border-amber-500/40 shadow-amber-500/5' : 'border-zinc-200 dark:border-zinc-800'}`}>
         <div className="hidden sm:flex flex-col items-center gap-3 pt-2">
-          <button onClick={() => handleVote('thread', thread.id)} className="p-3 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all cursor-pointer border border-transparent hover:border-orange-500/20">
+          <button onClick={() => handleVote('thread', thread.id, thread.authorId)} className={`p-3 rounded-xl transition-all border border-transparent ${user?.id === thread.authorId ? 'text-zinc-300 dark:text-zinc-700 cursor-not-allowed' : 'text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 hover:border-orange-500/20 cursor-pointer'}`}>
             <Flame className="size-6" />
           </button>
           <span className="font-black text-xl text-zinc-900 dark:text-zinc-100">{thread.upvotes}</span>
@@ -195,9 +200,16 @@ export default function Thread() {
               <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-500 to-amber-400"></div>
               {thread.lockedContent ? (
                 <div className="animation-fade-in">
-                  <h4 className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <LockKeyhole className="size-4" /> Decrypted Payload
-                  </h4>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                      <h4 className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest flex items-center gap-2">
+                        <LockKeyhole className="size-4" /> Decrypted Payload
+                      </h4>
+                      {(user?.isVip || user?.role === 'admin') && user?.id !== thread.authorId && (
+                         <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider rounded-md">
+                           <Crown className="size-3" /> VIP Override Active
+                         </span>
+                      )}
+                  </div>
                   <div className="bg-white dark:bg-[#0a0a0a] p-5 rounded-xl border border-orange-500/30 overflow-x-auto shadow-sm">
                     <pre className="text-zinc-800 dark:text-zinc-200 font-mono text-sm whitespace-pre-wrap break-all m-0">{thread.lockedContent}</pre>
                   </div>
@@ -224,7 +236,9 @@ export default function Thread() {
           
           <div className="mt-10 pt-6 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-4">
             <Link to={`/profile/${thread.author}`} className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors px-4 py-2 rounded-xl group">
-              <div className="size-8 rounded-full bg-orange-500/10 flex items-center justify-center"><User className="size-4 text-orange-500" /></div>
+              <div className="size-8 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-orange-500/10 transition-colors">
+                 {thread.authorRole === 'admin' ? <Shield className="size-4 text-red-500" /> : thread.authorIsVip ? <Crown className="size-4 text-amber-500" /> : <User className="size-4 text-zinc-500 group-hover:text-orange-500" />}
+              </div>
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider leading-none mb-1">Author</span>
                 <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-orange-500 transition-colors leading-none">{thread.author}</span>
@@ -254,22 +268,26 @@ export default function Thread() {
             </div>
           ) : (
             thread.replies.map(reply => (
-              <div key={reply.id} className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 md:p-8 ml-0 md:ml-12 flex flex-col sm:flex-row gap-6 transition-all hover:border-orange-500/30 hover:shadow-md">
+              <div key={reply.id} className={`relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 md:p-8 ml-0 md:ml-12 flex flex-col sm:flex-row gap-6 transition-all hover:shadow-md ${reply.authorIsVip ? 'hover:border-amber-500/30' : 'hover:border-orange-500/30'}`}>
                 {(isModerator || user?.id === reply.authorId) && (
-                  <button onClick={() => handleDeleteReply(reply.id)} className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                  <button onClick={() => handleDeleteReply(reply.id)} className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
                     <Trash2 className="size-4" />
                   </button>
                 )}
                 <div className="flex sm:flex-col items-center justify-between sm:justify-start gap-4 sm:gap-2 shrink-0 border-b sm:border-b-0 sm:border-r border-zinc-100 dark:border-zinc-800 pb-4 sm:pb-0 sm:pr-6">
                   <div className="flex flex-col items-center gap-1">
-                    <button onClick={() => handleVote('reply', reply.id)} className="p-2 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-orange-500/20"><Flame className="size-5" /></button>
+                    <button onClick={() => handleVote('reply', reply.id, reply.authorId)} className={`p-2 rounded-xl transition-colors border border-transparent ${user?.id === reply.authorId ? 'text-zinc-300 dark:text-zinc-700 cursor-not-allowed' : 'text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 hover:border-orange-500/20 cursor-pointer'}`}>
+                      <Flame className="size-5" />
+                    </button>
                     <span className="font-black text-lg text-zinc-900 dark:text-white">{reply.upvotes}</span>
                   </div>
                 </div>
                 <div className="flex-1 overflow-hidden flex flex-col">
                   <div className="flex items-center gap-4 mb-4">
                     <Link to={`/profile/${reply.author}`} className="flex items-center gap-2 group">
-                      <div className="size-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><User className="size-3 text-zinc-500 group-hover:text-orange-500 transition-colors" /></div>
+                      <div className="size-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                        {reply.authorRole === 'admin' ? <Shield className="size-3 text-red-500" /> : reply.authorIsVip ? <Crown className="size-3 text-amber-500" /> : <User className="size-3 text-zinc-500 group-hover:text-orange-500 transition-colors" />}
+                      </div>
                       <span className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-orange-500 transition-colors">{reply.author}</span>
                     </Link>
                     <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
