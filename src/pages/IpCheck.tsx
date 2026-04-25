@@ -89,7 +89,8 @@ export default function IpCheck() {
     return 'High Risk Vector';
   };
 
-  const circumference = 351.85; // 2 * Math.PI * 56
+  // Dynamically calculate the circumference based on the SVG circle radius (r=70)
+  const circumference = 439.82; // 2 * Math.PI * 70
 
   return (
     <div className="max-w-6xl mx-auto md:py-8 animation-fade-in">
@@ -176,8 +177,8 @@ export default function IpCheck() {
                       cx="80" cy="80" r="70" 
                       className={`${data.security.riskScore < 33 ? 'stroke-emerald-500' : data.security.riskScore < 66 ? 'stroke-amber-500' : 'stroke-red-500'} transition-all duration-1500 ease-out`} 
                       strokeWidth="12" fill="none" 
-                      strokeDasharray="439.8" 
-                      strokeDashoffset={439.8 - (439.8 * data.security.riskScore) / 100} 
+                      strokeDasharray={circumference} 
+                      strokeDashoffset={circumference - (circumference * data.security.riskScore) / 100} 
                       strokeLinecap="round" 
                     />
                   </svg>
