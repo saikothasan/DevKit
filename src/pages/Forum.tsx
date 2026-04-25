@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight, Crown, Shield } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -17,6 +17,7 @@ const formatCategory = (cat: string) => {
 type Thread = {
   id: number; title: string; category: string; author: string; upvotes: number;
   views: number; isPinned: boolean; isLocked: boolean; hasLockedContent: boolean; createdAt: string;
+  authorIsVip: boolean; authorRole: string;
 };
 
 type PaginationMeta = { page: number; limit: number; total: number; totalPages: number; };
@@ -125,7 +126,7 @@ export default function Forum() {
             ) : (
               <>
                 {threads.map(thread => (
-                  <Link key={thread.id} to={`/forum/${thread.id}`} className={`group flex flex-col sm:flex-row gap-4 p-6 bg-white dark:bg-[#0a0a0a] border rounded-2xl transition-all ${thread.isPinned ? 'border-orange-500/50 bg-orange-50/50 dark:bg-orange-500/5 shadow-sm' : 'border-zinc-200 dark:border-zinc-800 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5'}`}>
+                  <Link key={thread.id} to={`/forum/${thread.id}`} className={`group flex flex-col sm:flex-row gap-4 p-6 bg-white dark:bg-[#0a0a0a] border rounded-2xl transition-all ${thread.isPinned ? 'border-orange-500/50 bg-orange-50/50 dark:bg-orange-500/5 shadow-sm' : thread.authorIsVip ? 'border-amber-500/30 hover:border-amber-500/60 shadow-sm' : 'border-zinc-200 dark:border-zinc-800 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5'}`}>
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-2.5 mb-3">
                         {thread.isPinned && <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20"><Pin className="size-3" /> Pinned</span>}
@@ -139,7 +140,10 @@ export default function Forum() {
                       </div>
                       <h3 className="font-bold text-lg md:text-xl text-zinc-900 dark:text-zinc-100 mb-3 group-hover:text-orange-500 transition-colors line-clamp-2 leading-snug">{thread.title}</h3>
                       <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-900 border border-transparent dark:border-zinc-800 rounded-md truncate max-w-[150px]"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> {thread.author}</span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-900 border border-transparent dark:border-zinc-800 rounded-md truncate max-w-[200px]">
+                           {thread.authorRole === 'admin' ? <Shield className="size-3.5 text-red-500" /> : thread.authorIsVip ? <Crown className="size-3.5 text-amber-500" /> : <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>}
+                           {thread.author}
+                        </span>
                       </div>
                     </div>
                     
@@ -152,11 +156,11 @@ export default function Forum() {
 
                 {meta.totalPages > 1 && (
                   <div className="flex items-center justify-center gap-4 pt-6">
-                    <button onClick={() => fetchThreads(meta.page - 1)} disabled={meta.page === 1} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors">
+                    <button onClick={() => fetchThreads(meta.page - 1)} disabled={meta.page === 1} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors cursor-pointer">
                       <ChevronLeft className="size-5 text-zinc-900 dark:text-white" />
                     </button>
                     <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Page {meta.page} of {meta.totalPages}</span>
-                    <button onClick={() => fetchThreads(meta.page + 1)} disabled={meta.page === meta.totalPages} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors">
+                    <button onClick={() => fetchThreads(meta.page + 1)} disabled={meta.page === meta.totalPages} className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors cursor-pointer">
                       <ChevronRight className="size-5 text-zinc-900 dark:text-white" />
                     </button>
                   </div>
@@ -178,7 +182,10 @@ export default function Forum() {
                 <textarea required minLength={10} rows={5} placeholder="Public Payload (Markdown)..." value={newThread.content} onChange={e => setNewThread({...newThread, content: e.target.value})} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white outline-none resize-none focus:ring-2 focus:ring-orange-500/50 custom-scrollbar shadow-inner" />
                 
                 <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><LockKeyhole className="size-3.5 text-orange-500" /> Encrypted Payload (Optional)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center justify-between">
+                     <span className="flex items-center gap-1.5"><LockKeyhole className="size-3.5 text-orange-500" /> Encrypted Payload</span>
+                     {user.isVip && <span className="flex items-center gap-1 text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"><Crown className="size-3" /> VIP Bypass Active</span>}
+                  </label>
                   <textarea rows={3} placeholder="Hidden vectors (BINs, configurations)..." value={newThread.lockedContent} onChange={e => setNewThread({...newThread, lockedContent: e.target.value})} className="w-full bg-orange-500/5 border border-orange-500/20 rounded-xl px-4 py-3 text-sm outline-none resize-none focus:ring-2 focus:ring-orange-500/50 custom-scrollbar mb-3 placeholder:text-orange-500/50 text-orange-900 dark:text-orange-100" />
                   <div className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3">
                      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 flex-1">Reputation Cost:</span>
