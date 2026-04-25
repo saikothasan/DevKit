@@ -103,14 +103,12 @@ const checkCardSchema = z.object({
 toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) => {
   const { cardPayload } = c.req.valid('json');
   
-  // Extract BIN for lookup
   const rawNumbers = cardPayload.replace(/[^0-9|]/g, '');
   const parts = rawNumbers.split('|');
   const bin = parts[0]?.substring(0, 6) || '';
 
   let binInfoString = 'Unknown Network';
 
-  // 1. Execute concurrent BIN lookup
   if (bin.length >= 6) {
     try {
       const binResponse = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`);
@@ -126,7 +124,6 @@ toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) =
     }
   }
 
-  // 2. Execute Gateway Check
   try {
     const params = new URLSearchParams();
     params.append('data', cardPayload);
@@ -151,11 +148,8 @@ toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) =
     });
 
     const gatewayData = await checkResponse.json() as { error: number; msg: string };
-    
-    // Strip HTML tags from gateway msg to ensure clean client formatting
     const cleanMsg = gatewayData.msg ? gatewayData.msg.replace(/<[^>]*>?/gm, '').trim() : 'No response data';
 
-    // Map the error code to a standardized status string based on provided specs
     let statusString = 'Unknown';
     if (gatewayData.error === 1) statusString = 'Live';
     else if (gatewayData.error === 2) statusString = 'Die';
@@ -207,26 +201,66 @@ const checkIpSchema = z.object({ ip: z.string().optional() });
 toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
   let { ip } = c.req.valid('json');
   
-  // Robust IP extraction
   if (!ip || ip.trim() === '') {
     const rawIp = c.req.header('CF-Connecting-IP') || c.req.header('x-forwarded-for') || '1.1.1.1';
-    // If x-forwarded-for contains multiple IPs, grab the first one (the actual client)
     ip = rawIp.split(',')[0].trim();
   }
 
   try {
-    // 1. Fetch geographic routing
-    // FIX: The free tier of ip-api.com strictly requires HTTP. Using HTTPS results in a 403 Forbidden.
-    const ipInfoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
-    
-    if (!ipInfoRes.ok) return c.json({ success: false, message: 'Upstream Geo-IP provider rejected connection.' }, 502);
-    const ipInfo = await ipInfoRes.json() as any;
+    let ipInfo: any = null;
+    let fallbackUsed = false;
 
-    if (ipInfo.status !== 'success') {
-       return c.json({ success: false, message: ipInfo.message || 'Failed to resolve IP vector.' });
+    // Primary Execution: ip-api.com
+    try {
+      const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
+      if (ipApiRes.ok) {
+        const data = await ipApiRes.json() as any;
+        if (data.status === 'success') {
+          ipInfo = data;
+        }
+      }
+    } catch (e) {
+      // Primary provider failed, failover to secondary
     }
 
-    // 2. Fetch Proxy/VPN & Threat Risk analysis over HTTPS
+    // Secondary Execution: ipwho.is (Robust Fallback)
+    if (!ipInfo) {
+      try {
+        const ipWhoRes = await fetch(`https://ipwho.is/${ip}`);
+        if (ipWhoRes.ok) {
+          const data = await ipWhoRes.json() as any;
+          if (data.success) {
+            ipInfo = {
+              continent: data.continent,
+              country: data.country,
+              countryCode: data.country_code,
+              regionName: data.region,
+              city: data.city,
+              zip: data.postal || '',
+              lat: data.latitude,
+              lon: data.longitude,
+              timezone: data.timezone?.id || 'UTC',
+              isp: data.connection?.isp || 'Unknown',
+              org: data.connection?.org || 'Unknown',
+              as: data.connection?.asn ? `AS${data.connection.asn}` : 'Unknown',
+              reverse: data.connection?.domain || '',
+              mobile: false, 
+              proxy: false,
+              hosting: false
+            };
+            fallbackUsed = true;
+          }
+        }
+      } catch (e) {
+        // Total provider failure
+      }
+    }
+
+    if (!ipInfo) {
+      return c.json({ success: false, message: 'All upstream Geo-IP providers rejected the connection or rate-limited the node.' }, 502);
+    }
+
+    // Proxy/VPN & Threat Risk analysis over HTTPS
     let proxyData: any = {};
     try {
       const proxyCheckRes = await fetch(`https://proxycheck.io/v2/${ip}?vpn=1&asn=1&risk=1`);
@@ -235,10 +269,9 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
         proxyData = proxyCheck[ip] || {};
       }
     } catch {
-      // Graceful degradation: Continue without advanced proxy check if API fails
+      // Graceful degradation for proxy check
     }
 
-    // 3. Assemble unified intelligence payload with solid fallbacks
     const data = {
        ip,
        location: {
@@ -264,7 +297,7 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
          isHosting: ipInfo.hosting === true || false,
          isMobile: ipInfo.mobile === true || false,
          riskScore: parseInt(proxyData.risk) || 0,
-         type: proxyData.type || 'Residential'
+         type: proxyData.type || (fallbackUsed ? 'Unknown' : 'Residential')
        }
     };
 
