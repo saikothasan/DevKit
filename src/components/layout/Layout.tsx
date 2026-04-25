@@ -1,69 +1,34 @@
-import { Suspense } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
 import { MobileNav } from './MobileNav';
-import { Footer } from './Footer';
-import { Loader2 } from 'lucide-react';
-
-// Premium Route Fallback Loader
-const RouteFallback = () => (
-  <motion.div 
-    initial={{ opacity: 0 }} 
-    animate={{ opacity: 1 }} 
-    exit={{ opacity: 0 }}
-    className="flex-1 w-full h-full flex flex-col items-center justify-center min-h-[60vh] gap-4"
-  >
-    <div className="relative flex items-center justify-center">
-      <div className="absolute inset-0 bg-brand-orange/20 blur-xl rounded-full" />
-      <Loader2 className="size-8 text-brand-orange animate-spin relative z-10" />
-    </div>
-    <p className="text-sm font-medium text-zinc-500 animate-pulse tracking-wide">
-      Establishing secure connection...
-    </p>
-  </motion.div>
-);
 
 export function Layout() {
-  const location = useLocation();
-
   return (
-    <div className="flex min-h-[100dvh] w-full bg-[var(--bg-primary)] overflow-hidden">
-      {/* Ambient Background Grid */}
-      <div className="fixed inset-0 pointer-events-none bg-grid-pattern z-0" />
+    <div className="relative min-h-screen w-full bg-[#fafafa] dark:bg-[#050505] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100 transition-colors duration-300">
       
-      {/* Desktop Navigation Landmark */}
+      {/* Global Ambient Illumination (Hardware Accelerated) */}
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-500/5 blur-[120px] rounded-full pointer-events-none z-0 hidden md:block will-change-transform transform-gpu"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-amber-500/5 blur-[100px] rounded-full pointer-events-none z-0 hidden md:block will-change-transform transform-gpu"></div>
+
+      {/* Desktop Navigation Node */}
       <Sidebar />
       
-      {/* Primary Application Surface */}
-      <div className="flex flex-col flex-1 w-full md:pl-64 lg:pl-72 transition-all duration-500 ease-spring h-[100dvh] overflow-y-auto custom-scrollbar relative z-10">
+      {/* Primary Execution Viewport */}
+      <div className="flex min-h-screen flex-col md:pl-64 lg:pl-72 transition-all duration-300 ease-in-out relative z-10">
+        
+        {/* Mobile Identity & Routing Header */}
         <MobileHeader />
         
-        {/* Route Transition Engine */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.main 
-            key={location.pathname}
-            initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-6 pb-28 md:pb-12 flex flex-col will-change-[opacity,transform,filter]"
-            role="main"
-          >
-            <Suspense fallback={<RouteFallback />}>
-              <Outlet />
-            </Suspense>
-          </motion.main>
-        </AnimatePresence>
+        {/* Dynamic Payload Injection Area */}
+        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10 pb-28 md:pb-12 animation-fade-in relative">
+          <Outlet />
+        </main>
         
-        <div className="pb-20 md:pb-0 px-safe">
-          <Footer />
-        </div>
+        {/* Mobile Tab-Bar Node */}
+        <MobileNav />
+        
       </div>
-
-      {/* Native App-like Mobile Bottom Navigation */}
-      <MobileNav />
     </div>
   );
 }
