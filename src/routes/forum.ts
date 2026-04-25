@@ -57,6 +57,7 @@ forumRouter.get('/threads', async (c) => {
         authorId: threads.authorId,
         upvotes: threads.upvotes, 
         views: threads.views,
+        replyCount: threads.replyCount, // Added missing telemetry
         isPinned: threads.isPinned, 
         isLocked: threads.isLocked, 
         createdAt: threads.createdAt,
@@ -107,6 +108,7 @@ forumRouter.get('/threads/:id', async (c) => {
     authorId: threads.authorId,
     upvotes: threads.upvotes,
     views: threads.views,
+    replyCount: threads.replyCount, // Added
     isPinned: threads.isPinned,
     isLocked: threads.isLocked,
     createdAt: threads.createdAt,
@@ -132,6 +134,7 @@ forumRouter.get('/threads/:id', async (c) => {
     author: replies.author,
     authorId: replies.authorId,
     upvotes: replies.upvotes,
+    isAcceptedAnswer: replies.isAcceptedAnswer, // Added
     createdAt: replies.createdAt,
     authorIsVip: users.isVip,
     authorRole: users.role
@@ -264,9 +267,15 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
 
   try {
     const result = await db.insert(replies).values({ threadId, content, authorId: user.id, author: user.username }).returning();
+    
+    // FIX: Increment thread reply count and user points in a batch to maintain integrity
     c.executionCtx.waitUntil(
-      db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)).execute()
+      db.batch([
+        db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)),
+        db.update(threads).set({ replyCount: sql`${threads.replyCount} + 1` }).where(eq(threads.id, threadId))
+      ])
     );
+    
     return c.json(result[0], 201);
   } catch (err) {
     return c.json({ error: 'Transmission failed.' }, 500);
@@ -316,6 +325,7 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   }
 });
 
+// Moderation routes remaining unchanged...
 forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
@@ -325,7 +335,11 @@ forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   if (!reply) return c.json({ error: 'Reply not found' }, 404);
   if (reply.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
 
-  await db.delete(replies).where(eq(replies.id, replyId)).execute();
+  // Decrement thread reply count
+  await db.batch([
+    db.delete(replies).where(eq(replies.id, replyId)),
+    db.update(threads).set({ replyCount: sql`${threads.replyCount} - 1` }).where(eq(threads.id, reply.threadId))
+  ]);
   return c.json({ success: true });
 });
 
