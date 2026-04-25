@@ -207,19 +207,23 @@ const checkIpSchema = z.object({ ip: z.string().optional() });
 toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
   let { ip } = c.req.valid('json');
   
+  // Robust IP extraction
   if (!ip || ip.trim() === '') {
-    ip = c.req.header('CF-Connecting-IP') || '1.1.1.1';
+    const rawIp = c.req.header('CF-Connecting-IP') || c.req.header('x-forwarded-for') || '1.1.1.1';
+    // If x-forwarded-for contains multiple IPs, grab the first one (the actual client)
+    ip = rawIp.split(',')[0].trim();
   }
 
   try {
-    // 1. Fetch geographic routing (Note: Forced HTTPS; if using free ip-api tier, use alternative secure provider or handle mixed content proxying if strictly necessary. Assuming paid/secure tier logic here)
+    // 1. Fetch geographic routing
+    // FIX: The free tier of ip-api.com strictly requires HTTP. Using HTTPS results in a 403 Forbidden.
     const ipInfoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
     
     if (!ipInfoRes.ok) return c.json({ success: false, message: 'Upstream Geo-IP provider rejected connection.' }, 502);
     const ipInfo = await ipInfoRes.json() as any;
 
     if (ipInfo.status !== 'success') {
-       return c.json({ success: false, message: 'Failed to resolve IP vector.' });
+       return c.json({ success: false, message: ipInfo.message || 'Failed to resolve IP vector.' });
     }
 
     // 2. Fetch Proxy/VPN & Threat Risk analysis over HTTPS
@@ -234,22 +238,31 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
       // Graceful degradation: Continue without advanced proxy check if API fails
     }
 
-    // 3. Assemble unified intelligence payload
+    // 3. Assemble unified intelligence payload with solid fallbacks
     const data = {
        ip,
        location: {
-         continent: ipInfo.continent, country: ipInfo.country, countryCode: ipInfo.countryCode,
-         region: ipInfo.regionName, city: ipInfo.city, zip: ipInfo.zip,
-         lat: ipInfo.lat, lon: ipInfo.lon, timezone: ipInfo.timezone,
+         continent: ipInfo.continent || 'Unknown', 
+         country: ipInfo.country || 'Unknown', 
+         countryCode: ipInfo.countryCode || 'XX',
+         region: ipInfo.regionName || 'Unknown', 
+         city: ipInfo.city || 'Unknown', 
+         zip: ipInfo.zip || '',
+         lat: ipInfo.lat || 0, 
+         lon: ipInfo.lon || 0, 
+         timezone: ipInfo.timezone || 'UTC',
        },
        network: {
-         isp: ipInfo.isp, org: ipInfo.org, asn: ipInfo.as, reverse: ipInfo.reverse
+         isp: ipInfo.isp || 'Unknown', 
+         org: ipInfo.org || 'Unknown', 
+         asn: ipInfo.as || 'Unknown', 
+         reverse: ipInfo.reverse || ''
        },
        security: {
-         isProxy: ipInfo.proxy || proxyData.proxy === 'yes' || false,
+         isProxy: ipInfo.proxy === true || proxyData.proxy === 'yes' || false,
          isVpn: proxyData.vpn === 'yes' || false,
-         isHosting: ipInfo.hosting || false,
-         isMobile: ipInfo.mobile || false,
+         isHosting: ipInfo.hosting === true || false,
+         isMobile: ipInfo.mobile === true || false,
          riskScore: parseInt(proxyData.risk) || 0,
          type: proxyData.type || 'Residential'
        }
