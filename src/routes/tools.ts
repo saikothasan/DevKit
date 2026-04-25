@@ -213,7 +213,7 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
 
   try {
     // 1. Fetch geographic routing (Note: Forced HTTPS; if using free ip-api tier, use alternative secure provider or handle mixed content proxying if strictly necessary. Assuming paid/secure tier logic here)
-    const ipInfoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
+    const ipInfoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
     
     if (!ipInfoRes.ok) return c.json({ success: false, message: 'Upstream Geo-IP provider rejected connection.' }, 502);
     const ipInfo = await ipInfoRes.json() as any;
