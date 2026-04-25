@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
-import { MobileNav } from './MobileNav';
 
 export function Layout() {
   return (
@@ -21,12 +20,10 @@ export function Layout() {
         <MobileHeader />
         
         {/* Dynamic Payload Injection Area */}
-        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10 pb-28 md:pb-12 animation-fade-in relative">
+        {/* Adjusted padding: Removed mobile bottom padding (pb-28) to reclaim viewport space */}
+        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10 pb-8 md:pb-12 animation-fade-in relative">
           <Outlet />
         </main>
-        
-        {/* Mobile Tab-Bar Node */}
-        <MobileNav />
         
       </div>
     </div>
