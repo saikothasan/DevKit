@@ -2,13 +2,13 @@ import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, count, and, sql, desc, gt } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/d1'; // FIX: Restored drizzle core import
 import { sign, verify } from 'hono/jwt';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { users, turnstileEvents, threads, replies } from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/utils/crypto';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
-// Strict Environment Binding
 export type AuthEnv = {
   Bindings: { 
     DB: D1Database; 
@@ -20,7 +20,7 @@ export type AuthEnv = {
     TURNSTILE_SECRET_KEY?: string;
   };
   Variables: { 
-    db: DrizzleD1Database; // Inherited from global middleware
+    db: DrizzleD1Database;
     user: { id: number; username: string; role: string; exp: number; }; 
   };
 };
@@ -29,7 +29,6 @@ export const authRouter = new Hono<AuthEnv>();
 
 const getSecret = (c: Context<AuthEnv>): string => c.env.JWT_SECRET || 'super-secure-dev-secret-123';
 
-// Strictly typed middleware
 export const requireAuth = async (c: Context<AuthEnv>, next: Next) => {
   const token = getCookie(c, 'auth_token');
   if (!token) return c.json({ error: 'Unauthorized: Cryptographic token required.' }, 401);
@@ -83,10 +82,6 @@ const sendVerificationEmail = async (email: string, token: string, apiKey: strin
   if (!res.ok) throw new Error('Verification transmission failed.');
 };
 
-// ==========================================
-// Authentication Execution Vectors
-// ==========================================
-
 const registerSchema = z.object({
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, "Alphanumeric and underscores strictly permitted"),
   email: z.string().email(),
@@ -95,7 +90,7 @@ const registerSchema = z.object({
 });
 
 authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
-  const db = c.var.db || drizzle(c.env.DB); // Fallback if middleware is skipped
+  const db = c.var.db || drizzle(c.env.DB);
   const { username, email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
