@@ -1,12 +1,6 @@
-// Native Web Crypto API implementation - NO BLOCKING NODE.JS COMPAT
+const PBKDF2_ITERATIONS = 100000; 
 
-// OWASP Recommended Iterations for PBKDF2-HMAC-SHA256 (2024 Standard)
-const PBKDF2_ITERATIONS = 600000; 
-
-/**
- * Constant-time string comparison to prevent timing attacks
- */
-const timingSafeEqual = (a: string, b: string): boolean => {
+export const timingSafeEqual = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
@@ -20,20 +14,11 @@ export const hashPassword = async (password: string): Promise<string> => {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   
   const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"]
+    "raw", encoder.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
   );
   
   const hash = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: PBKDF2_ITERATIONS,
-      hash: "SHA-256",
-    },
+    { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     keyMaterial,
     256 // 32 bytes
   );
@@ -49,7 +34,6 @@ export const verifyPassword = async (password: string, storedHash: string): Prom
   if (parts.length !== 2) return false;
   
   const [saltHex, key] = parts;
-  
   const saltMatch = saltHex.match(/.{1,2}/g);
   if (!saltMatch) return false;
   
@@ -58,26 +42,16 @@ export const verifyPassword = async (password: string, storedHash: string): Prom
   
   try {
     const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(password),
-      { name: "PBKDF2" },
-      false,
-      ["deriveBits"]
+      "raw", encoder.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
     );
     
     const hash = await crypto.subtle.deriveBits(
-      {
-        name: "PBKDF2",
-        salt: salt,
-        iterations: PBKDF2_ITERATIONS,
-        hash: "SHA-256",
-      },
+      { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
       keyMaterial,
       256
     );
     
     const hashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    
     return timingSafeEqual(hashHex, key);
   } catch (e) {
     return false;
