@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, Hash, ChevronLeft, ChevronRight, Crown, Shield, Layers } from 'lucide-react';
+import { MessageSquarePlus, MessageCircle, Search, Flame, Eye, LockKeyhole, Pin, ChevronLeft, ChevronRight, Crown, Shield, Layers } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
