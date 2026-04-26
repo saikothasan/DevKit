@@ -197,7 +197,7 @@ export default function Thread() {
         <ShieldAlert className="size-16 text-zinc-500 mx-auto mb-6 opacity-50" />
         <h1 className="text-3xl font-bold mb-4 text-[var(--text-primary)]">Target Vector Missing</h1>
         <p className="text-[var(--text-secondary)] mb-8">The requested thread could not be located in the central database. It may have been relocated or wiped.</p>
-        <Link to="/forum" className="px-6 py-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:border-[var(--orange)] transition-colors inline-flex items-center gap-2">
+        <Link to="/" className="px-6 py-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:border-[var(--orange)] transition-colors inline-flex items-center gap-2">
             <ArrowLeft className="size-4" /> Return to Hub
         </Link>
     </div>
@@ -219,7 +219,7 @@ export default function Thread() {
       <SeoHead title={`${thread.title} - Forum`} description={thread.content.substring(0, 160)} />
       
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8 border-b border-[var(--border)] pb-6">
-        <Link to="/forum" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--orange)] shadow-sm transition-all w-fit group">
+        <Link to="/" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--orange)] shadow-sm transition-all w-fit group">
           <ArrowLeft className="size-4 group-hover:-translate-x-1 transition-transform" /> Back to Board
         </Link>
         
