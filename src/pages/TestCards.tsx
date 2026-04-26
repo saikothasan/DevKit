@@ -1,204 +1,229 @@
 import { useState, useMemo } from 'react';
 import { SeoHead } from '@/components/SeoHead';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { Copy, Check, Sparkles, Database, ShieldAlert, Code2, FileJson, FileText, CreditCard, Network, AlertCircle, Shield, Cpu, RefreshCw, HelpCircle } from 'lucide-react';
+import { Copy, Check, Sparkles, Code2, FileJson, FileText, CreditCard, RefreshCw, AlertCircle, ChevronDown } from 'lucide-react';
+import { ToolPageHeader, ToolCard } from '@/components/ToolPageHeader';
 
 const PRESET_BINS = [
-  { name: 'Stripe Visa', bin: '424242' },
-  { name: 'Stripe MC', bin: '555555' },
-  { name: 'Braintree Amex', bin: '378282' },
-  { name: 'Discover Test', bin: '601100' },
-  { name: 'JCB QA', bin: '352800' }
+  { name: 'Stripe Visa',     bin: '424242' },
+  { name: 'Stripe MC',       bin: '555555' },
+  { name: 'Braintree Amex',  bin: '378282' },
+  { name: 'Discover Test',   bin: '601100' },
+  { name: 'JCB QA',          bin: '352800' },
 ];
 
-type CardData = {
-  network?: string; number: string; expMonth: string; expYear: string; cvv: string; formattedString?: string;
-};
+type CardData = { network?: string; number: string; expMonth: string; expYear: string; cvv: string; formattedString?: string; };
 type ExportFormat = 'pipe' | 'json' | 'csv';
 
 const FAQ_DATA = [
-  { question: "What is a test credit card generator?", answer: "A test credit card generator creates dummy card numbers that pass the cryptographic Luhn Check (Modulus 10). They are used strictly by developers to test payment gateways like Stripe, PayPal, or Braintree in a sandbox environment." },
-  { question: "Can these generated cards make real purchases?", answer: "Absolutely not. These cards do not correspond to any real bank accounts and hold no financial validity. They will be instantly declined if used on a live production gateway." },
-  { question: "What is the Luhn algorithm?", answer: "The Luhn algorithm (or Mod 10) is a checksum formula used to validate a variety of identification numbers, primarily credit card numbers. Our generator ensures every dummy vector perfectly satisfies this algorithm to bypass front-end validation." }
+  { q: 'What is a test credit card generator?', a: 'Creates dummy card numbers that pass the Luhn Check. Used strictly by developers to test payment gateways like Stripe, PayPal, or Braintree in sandbox environments.' },
+  { q: 'Can generated cards make real purchases?', a: 'No. These cards do not correspond to any real bank accounts and hold no financial validity. They will be instantly declined on live gateways.' },
+  { q: 'What is the Luhn algorithm?', a: 'The Luhn algorithm (Mod 10) is a checksum formula used to validate identification numbers, primarily credit card numbers. Every generated card satisfies this algorithm.' },
 ];
 
 export default function TestCards() {
   const [bin, setBin] = useState('424242');
-  const [quantity, setQuantity] = useState<number>(10);
-  const [generatedCards, setGeneratedCards] = useState<CardData[]>([]);
-  const [metadata, setMetadata] = useState<{ networkDetected: string, vectorLength: number } | null>(null);
+  const [quantity, setQuantity] = useState(10);
+  const [cards, setCards] = useState<CardData[]>([]);
+  const [metadata, setMetadata] = useState<{ networkDetected: string; vectorLength: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [format, setFormat] = useState<ExportFormat>('pipe');
-  
+  const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const { copiedText, copy } = useCopyToClipboard();
 
   const detectedNetwork = useMemo(() => {
     if (/^3[47]/.test(bin)) return 'American Express';
-    if (/^5[1-5]/.test(bin) || /^2(2[2-9][1-9]|2[3-9]\d{2}|[3-6]\d{3}|7[0-1]\d{2}|720)/.test(bin)) return 'Mastercard';
+    if (/^5[1-5]/.test(bin)) return 'Mastercard';
     if (/^4/.test(bin)) return 'Visa';
-    if (/^6(?:011|5\d{2}|4[4-9]\d|22(?:12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))/.test(bin)) return 'Discover';
+    if (/^6(?:011|5)/.test(bin)) return 'Discover';
     if (/^35/.test(bin)) return 'JCB';
-    if (/^3(?:0[0-5]|[68])/.test(bin)) return 'Diners Club';
-    if (/^62/.test(bin)) return 'China UnionPay';
-    return bin.length > 0 ? 'Custom Network' : 'Awaiting BIN...';
+    return bin.length > 0 ? 'Custom' : 'Enter BIN...';
   }, [bin]);
 
   const handleGenerate = async () => {
-    if (!bin.trim()) { setError('Please provide a valid BIN.'); return; }
+    if (!bin.trim()) { setError('Enter a valid BIN.'); return; }
     setIsLoading(true); setError('');
-    
     try {
       const res = await fetch('/api/tools/generate-cards', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bin, quantity })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bin, quantity }),
       });
-      const data = await res.json() as { success?: boolean, cards?: CardData[], metadata?: any, error?: string };
-      
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to execute payload generation.');
-      
-      if (data.cards) {
-        setGeneratedCards(data.cards);
-        if (data.metadata) setMetadata(data.metadata);
-      }
-    } catch (err: any) { setError(err.message); } 
+      const data = await res.json() as { success?: boolean; cards?: CardData[]; metadata?: any; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed.');
+      if (data.cards) { setCards(data.cards); if (data.metadata) setMetadata(data.metadata); }
+    } catch (err: any) { setError(err.message); }
     finally { setIsLoading(false); }
   };
 
-  const formattedOutput = useMemo(() => {
-    if (!generatedCards.length) return '';
-    if (format === 'pipe') return generatedCards.map(c => c.formattedString || `${c.number}|${c.expMonth}|${c.expYear}|${c.cvv}`).join('\n');
-    if (format === 'csv') return 'Network,CardNumber,ExpMonth,ExpYear,CVV\n' + generatedCards.map(c => `${c.network || 'Unknown'},${c.number},${c.expMonth},${c.expYear},${c.cvv}`).join('\n');
-    if (format === 'json') return JSON.stringify(generatedCards.map(({ formattedString, ...rest }) => rest), null, 2);
+  const output = useMemo(() => {
+    if (!cards.length) return '';
+    if (format === 'pipe') return cards.map(c => c.formattedString || `${c.number}|${c.expMonth}|${c.expYear}|${c.cvv}`).join('\n');
+    if (format === 'csv') return 'Network,Number,ExpM,ExpY,CVV\n' + cards.map(c => `${c.network || ''},${c.number},${c.expMonth},${c.expYear},${c.cvv}`).join('\n');
+    if (format === 'json') return JSON.stringify(cards.map(({ formattedString, ...r }) => r), null, 2);
     return '';
-  }, [generatedCards, format]);
+  }, [cards, format]);
 
   return (
-    <div className="max-w-5xl mx-auto md:py-8 animation-fade-in">
-      <SeoHead 
-        title="Credit Card Generator | Luhn Valid CC Numbers" 
-        description="Generate 100% structurally valid, Luhn-compliant dummy credit card payloads. Output clean testing data for Visa, Mastercard, Amex, and Discover in JSON or CSV." 
-        keywords="test credit card generator, valid cc generator with cvv, dummy credit card numbers, Luhn algorithm generator, QA testing cards, test payment vectors"
-        isTool={true}
-        faqData={FAQ_DATA}
-      />
-      
-      <div className="mb-8 md:mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest mb-4 shadow-sm">
-          <Database className="size-3.5 fill-current" /> CC Generator
-        </div>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">Valid Card Generator</h1>
-        <p className="text-lg text-zinc-500 dark:text-zinc-400">Instantly synthesize mathematically valid dummy payment vectors utilizing precise network length constraints and cryptographic Luhn checks.</p>
-        
-        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-500/10 inline-flex px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-500/20">
-          <AlertCircle className="size-4" /> Strictly for local development and sandbox environments. Data holds no financial validity.
-        </div>
+    <div className="max-w-5xl mx-auto animation-fade-in">
+      <SeoHead title="Card Generator | DevKit" description="Generate Luhn-valid dummy credit card numbers for testing payment gateways." isTool={true} />
+
+      <ToolPageHeader badge="Generator" badgeIcon={Sparkles} title="Test Card Generator" description="Generate Luhn-valid dummy credit card numbers for Stripe, PayPal, Braintree, and other payment gateways." />
+
+      <div className="grid lg:grid-cols-5 gap-6 mb-8">
+        {/* Config */}
+        <ToolCard className="lg:col-span-2">
+          <div className="p-5 space-y-5">
+            {/* BIN Input */}
+            <div>
+              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>BIN / IIN</label>
+              <input
+                type="text"
+                value={bin}
+                onChange={e => setBin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="424242"
+                maxLength={8}
+                className="w-full py-3 px-4 rounded-xl text-sm font-bold outline-none transition-all"
+                style={{ fontFamily: "'JetBrains Mono', monospace", background: 'var(--surface-raised)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
+                onFocus={e => { e.currentTarget.style.borderColor = 'var(--orange)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--orange-dim)'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; }}
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <CreditCard className="size-3.5" style={{ color: 'var(--text-muted)' }} />
+                <span className="badge-mono text-orange-500">{detectedNetwork}</span>
+              </div>
+            </div>
+
+            {/* Presets */}
+            <div>
+              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>Quick Presets</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PRESET_BINS.map(p => (
+                  <button
+                    key={p.bin}
+                    onClick={() => setBin(p.bin)}
+                    className="px-3 py-2 rounded-lg text-xs font-bold text-left transition-all active:scale-95"
+                    style={{
+                      background: bin === p.bin ? 'var(--orange-dim)' : 'var(--surface-raised)',
+                      border: `1px solid ${bin === p.bin ? 'var(--orange-border)' : 'var(--border)'}`,
+                      color: bin === p.bin ? 'var(--orange)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <div>{p.name}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', opacity: 0.7 }}>{p.bin}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quantity */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="badge-mono" style={{ color: 'var(--text-muted)' }}>Quantity</label>
+                <span className="badge-mono text-orange-500">{quantity}</span>
+              </div>
+              <input
+                type="range" min={1} max={100} value={quantity}
+                onChange={e => setQuantity(Number(e.target.value))}
+                className="w-full accent-orange-500"
+              />
+              <div className="flex justify-between badge-mono mt-1" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                <span>1</span><span>100</span>
+              </div>
+            </div>
+
+            {/* Format */}
+            <div>
+              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>Export Format</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([['pipe', 'Pipe', FileText], ['json', 'JSON', FileJson], ['csv', 'CSV', Code2]] as [ExportFormat, string, any][]).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    onClick={() => setFormat(id)}
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-bold transition-all"
+                    style={{
+                      background: format === id ? 'var(--orange-dim)' : 'var(--surface-raised)',
+                      border: `1px solid ${format === id ? 'var(--orange-border)' : 'var(--border)'}`,
+                      color: format === id ? 'var(--orange)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <Icon className="size-4" /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <AlertCircle className="size-4 text-red-500 shrink-0" />
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleGenerate}
+              disabled={isLoading || !bin.trim()}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 active:scale-[0.98]"
+              style={{ background: 'var(--orange)', color: '#fff' }}
+            >
+              {isLoading ? <><RefreshCw className="size-4 animate-spin" /> Generating...</> : <><Sparkles className="size-4" /> Generate {quantity} Cards</>}
+            </button>
+          </div>
+        </ToolCard>
+
+        {/* Output */}
+        <ToolCard className="lg:col-span-3">
+          <div className="p-5 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>Generated Cards</h3>
+                {metadata && <p className="badge-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{metadata.networkDetected} · {metadata.vectorLength} digits</p>}
+              </div>
+              {output && (
+                <button
+                  onClick={() => copy(output)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  style={{ background: 'var(--orange-dim)', border: '1px solid var(--orange-border)', color: 'var(--orange)' }}
+                >
+                  {copiedText === output ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copiedText === output ? 'Copied!' : 'Copy All'}
+                </button>
+              )}
+            </div>
+            <textarea
+              readOnly
+              value={output || 'Generated cards will appear here...'}
+              rows={18}
+              className="flex-1 w-full rounded-xl p-4 text-xs outline-none resize-none custom-scrollbar"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                background: 'var(--surface-raised)',
+                border: '1px solid var(--border)',
+                color: output ? 'var(--text-primary)' : 'var(--text-muted)',
+                lineHeight: '1.8',
+              }}
+            />
+          </div>
+        </ToolCard>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl shadow-zinc-200/20 dark:shadow-black/20 overflow-hidden mb-16">
-        
-        <div className="p-6 md:p-8 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#0a0a0a]/50">
-          <div className="flex flex-wrap items-center gap-2 mb-6">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider mr-2">Presets</span>
-            {PRESET_BINS.map((preset) => (
-              <button key={preset.name} onClick={() => setBin(preset.bin)} className="px-4 py-1.5 rounded-xl text-xs font-bold transition-all bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-500 shadow-sm">
-                {preset.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            <div className="md:col-span-5">
-              <label className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                <span>Target BIN Prefix</span>
-                <span className="text-orange-500 flex items-center gap-1"><Network className="size-3" /> {detectedNetwork}</span>
-              </label>
-              <div className="relative">
-                <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400" />
-                <input type="text" value={bin} onChange={(e) => setBin(e.target.value.replace(/\D/g, ''))} placeholder="Enter 1 to 16 digits..." maxLength={16} className="w-full bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-12 pr-4 py-4 font-mono text-lg font-medium outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-sm" />
-              </div>
-            </div>
-            
-            <div className="md:col-span-4">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Volume Size</label>
-              <select value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-full bg-white dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-4 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-sm appearance-none cursor-pointer">
-                <option value={10}>10 Cards</option><option value={20}>20 Cards</option><option value={50}>50 Cards</option><option value={100}>100 Cards</option><option value={500}>500 Cards (Bulk)</option>
-              </select>
-            </div>
-            
-            <div className="md:col-span-3 pt-6">
-              <button onClick={handleGenerate} disabled={isLoading || bin.length < 1} className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold rounded-2xl transition-all disabled:opacity-50 shadow-lg active:scale-[0.98] cursor-pointer">
-                <Sparkles className="size-5" /> {isLoading ? 'Synthesizing...' : 'Execute'}
-              </button>
-            </div>
-          </div>
-          {error && <div className="mt-5 flex items-center gap-3 text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-200 font-medium"><ShieldAlert className="size-5 shrink-0" /> {error}</div>}
-        </div>
-
-        <div className="p-6 md:p-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <h3 className="font-bold text-lg flex items-center gap-2"><Code2 className="size-5 text-orange-500" /> Generated Payload</h3>
-              {metadata && <span className="hidden md:flex px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs font-bold uppercase tracking-wider rounded-md border border-zinc-200 dark:border-zinc-700">{metadata.networkDetected} • {metadata.vectorLength} DIGITS</span>}
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center bg-zinc-100 dark:bg-[#0a0a0a] p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                <button onClick={() => setFormat('pipe')} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${format === 'pipe' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer'}`}>Raw</button>
-                <button onClick={() => setFormat('json')} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${format === 'json' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer'}`}><FileJson className="size-3.5" /> JSON</button>
-                <button onClick={() => setFormat('csv')} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${format === 'csv' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer'}`}><FileText className="size-3.5" /> CSV</button>
-              </div>
-              <button onClick={() => copy(formattedOutput)} disabled={generatedCards.length === 0} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 ${copiedText ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-md border border-orange-500'}`}>
-                {copiedText ? <Check className="size-4" /> : <Copy className="size-4" />} {copiedText ? 'Copied' : 'Copy Payload'}
-              </button>
-            </div>
-          </div>
-          
-          <div className="relative group">
-            <textarea readOnly rows={Math.max(12, Math.min(25, generatedCards.length || 12))} value={formattedOutput} placeholder="Awaiting execution... Output will render here." className={`w-full bg-zinc-50 dark:bg-[#0a0a0a] border border-zinc-200 dark:border-zinc-800 rounded-2xl px-6 py-5 font-mono text-sm leading-relaxed text-zinc-800 dark:text-zinc-300 outline-none resize-y custom-scrollbar placeholder:text-zinc-400 focus:border-orange-500/50 ${format === 'json' ? 'whitespace-pre' : ''}`} />
-            {generatedCards.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-40">
-                 <Database className="size-16 mb-4 text-zinc-400" />
-                 <span className="text-sm font-semibold text-zinc-500">System Standing By...</span>
+      {/* FAQ */}
+      <div className="space-y-3">
+        <h3 className="font-bold text-lg mb-4" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>FAQ</h3>
+        {FAQ_DATA.map((item, i) => (
+          <div key={i} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+            <button onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-sm" style={{ background: 'var(--surface)', color: 'var(--text-primary)' }}>
+              {item.q}
+              <ChevronDown className={`size-4 shrink-0 transition-transform ${faqOpen === i ? 'rotate-180' : ''}`} style={{ color: 'var(--text-muted)' }} />
+            </button>
+            {faqOpen === i && (
+              <div className="px-5 pb-4 text-sm leading-relaxed" style={{ background: 'var(--surface-raised)', borderTop: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                {item.a}
               </div>
             )}
           </div>
-        </div>
+        ))}
       </div>
-
-      <article className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Why Use a Luhn-Valid Credit Card Generator?</h2>
-        
-        <div className="grid md:grid-cols-3 gap-8 mb-12">
-          <div className="space-y-3">
-            <div className="size-10 bg-orange-500/10 rounded-lg flex items-center justify-center text-orange-500 border border-orange-500/20 mb-4"><Shield className="size-5" /></div>
-            <h3 className="font-bold text-lg">Bypass Front-End Validation</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Modern web forms use JavaScript to enforce Modulus 10 (Luhn) checks before submission. Generating mathematically accurate dummy numbers ensures your testing reaches the backend seamlessly.</p>
-          </div>
-          <div className="space-y-3">
-            <div className="size-10 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500 border border-blue-500/20 mb-4"><RefreshCw className="size-5" /></div>
-            <h3 className="font-bold text-lg">E-Commerce Flow Testing</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Ensure cart abstractions, tax calculators, and database writes function correctly. You can export clean JSON or CSV formats to populate automated Playwright or Cypress testing scripts.</p>
-          </div>
-          <div className="space-y-3">
-            <div className="size-10 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 border border-emerald-500/20 mb-4"><Cpu className="size-5" /></div>
-            <h3 className="font-bold text-lg">Dynamic Network Simulation</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">Our engine automatically adjusts vector length based on the BIN network prefix (e.g., yielding 15 digits for Amex and 16 digits for Visa/Mastercard) for pixel-perfect integration testing.</p>
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-200 dark:border-zinc-800 pt-10">
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6 flex items-center gap-2"><HelpCircle className="size-6 text-orange-500" /> Frequently Asked Questions</h2>
-          <div className="grid gap-6">
-            {FAQ_DATA.map((faq, i) => (
-              <div key={i} className="bg-zinc-50 dark:bg-[#0a0a0a] rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800">
-                <h3 className="font-bold text-lg mb-2 text-zinc-900 dark:text-zinc-100">{faq.question}</h3>
-                <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">{faq.answer}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </article>
-
     </div>
   );
 }

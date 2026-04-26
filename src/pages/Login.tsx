@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, Mail, Lock, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { SeoHead } from '@/components/SeoHead';
 import { useAuth } from '@/context/AuthContext';
+import { Logo } from '@/components/Logo';
 
 function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -13,49 +14,90 @@ function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function InputField({
+  label, type, placeholder, value, onChange, icon: Icon, autoComplete
+}: {
+  label: string; type: string; placeholder: string;
+  value: string; onChange: (v: string) => void;
+  icon: React.ElementType; autoComplete?: string;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const isPassword = type === 'password';
+  const inputType = isPassword && showPassword ? 'text' : type;
+
+  return (
+    <div>
+      <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>{label}</label>
+      <div
+        className="relative flex items-center rounded-xl transition-all"
+        style={{
+          background: 'var(--surface-raised)',
+          border: `1px solid ${focused ? 'var(--orange)' : 'var(--border-strong)'}`,
+          boxShadow: focused ? '0 0 0 3px var(--orange-dim)' : 'none',
+        }}
+      >
+        <Icon className="absolute left-3.5 size-4 shrink-0 transition-colors" style={{ color: focused ? 'var(--orange)' : 'var(--text-muted)' }} />
+        <input
+          required
+          type={inputType}
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          className="flex-1 bg-transparent py-3.5 pl-11 pr-4 text-sm font-medium outline-none"
+          style={{ color: 'var(--text-primary)' }}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3.5 p-1 rounded transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
-  const [turnstileKey, setTurnstileKey] = useState(0); 
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { refreshUser } = useAuth();
   const navigate = useNavigate();
-
   const siteKey = import.meta.env.VITE_TURNSTILE_SITEKEY || '0x4AAAAAACZdr2afC17LFhhN';
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get('error');
+    const err = new URLSearchParams(window.location.search).get('error');
     if (err) setError(decodeURIComponent(err.replace(/\+/g, ' ')));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!turnstileToken) {
-      setError('Cryptographic security verification required.');
-      return;
-    }
-    
+    if (!turnstileToken) { setError('Please complete the security verification.'); return; }
     setIsSubmitting(true);
     setError('');
-
     try {
-      const res = await fetch('/api/auth/login', { 
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, turnstileToken }) 
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
-      
       const data = await res.json() as any;
-      
       if (!res.ok) {
-        setTurnstileToken(''); 
-        setTurnstileKey(prev => prev + 1); 
-        throw new Error(data.error?.issues?.[0]?.message || data.error || 'Authentication execution failed');
+        setTurnstileToken('');
+        setTurnstileKey(k => k + 1);
+        throw new Error(data.error?.issues?.[0]?.message || data.error || 'Authentication failed');
       }
-      
       await refreshUser();
       navigate('/');
     } catch (err: any) {
@@ -66,77 +108,122 @@ export default function Login() {
   };
 
   return (
-    <main className="flex items-center justify-center min-h-[80vh] p-4 relative z-10">
-      <SeoHead title="Authenticate Node" description="Establish a secure session to access the DevKit infrastructure." />
-      
-      {/* Ambient Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg h-96 bg-orange-500/20 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+    <main className="flex items-center justify-center min-h-[85vh] p-4 relative">
+      <SeoHead title="Sign In | DevKit" description="Sign in to access the DevKit platform." />
 
-      <div className="w-full max-w-[420px] bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800/80 rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-zinc-900/5 dark:ring-white/5">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-400"></div>
-        
-        <header className="text-center mb-8 animation-fade-in">
-          <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-500/20 text-orange-500 mb-5 shadow-inner">
-            <LogIn className="size-6" />
+      {/* Ambient glow */}
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] pointer-events-none -z-10 opacity-60"
+        style={{ background: 'radial-gradient(ellipse, rgba(243,128,32,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }}
+      />
+
+      <div
+        className="w-full max-w-[420px] rounded-2xl overflow-hidden animation-fade-up"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 24px 80px rgba(0,0,0,0.12)' }}
+      >
+        {/* Top accent bar */}
+        <div className="h-px w-full bg-gradient-to-r from-orange-500 via-amber-400 to-transparent" />
+
+        <div className="p-7 sm:p-9">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center mb-5">
+              <div
+                className="size-14 rounded-2xl flex items-center justify-center"
+                style={{ background: 'var(--orange-dim)', border: '1px solid var(--orange-border)' }}
+              >
+                <Logo className="size-8 text-orange-500" />
+              </div>
+            </div>
+            <h1
+              className="text-2xl font-bold tracking-tight mb-1.5"
+              style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}
+            >
+              Welcome back
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Sign in to access your account
+            </p>
           </div>
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight">Secure Authorization</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-sm font-medium">Initialize a session to access elite vectors.</p>
-        </header>
 
-        <a href="/api/auth/github" className="w-full mb-6 flex items-center justify-center gap-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98] group">
-          <GitHubIcon className="size-5 group-hover:scale-110 transition-transform" />
-          Authenticate via GitHub
-        </a>
+          {/* GitHub OAuth */}
+          <a
+            href="/api/auth/github"
+            className="w-full mb-5 flex items-center justify-center gap-3 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98] group"
+            style={{ background: '#24292e', color: '#fff' }}
+          >
+            <GitHubIcon className="size-4.5 group-hover:scale-110 transition-transform" />
+            Continue with GitHub
+          </a>
 
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-3 bg-white dark:bg-[#0a0a0a] text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Or standard protocol</span></div>
+          {/* Divider */}
+          <div className="relative mb-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full" style={{ borderTop: '1px solid var(--border)' }} />
+            </div>
+            <div className="relative flex justify-center">
+              <span
+                className="px-3 badge-mono"
+                style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
+              >
+                or continue with email
+              </span>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div
+              className="mb-5 flex items-start gap-3 p-3.5 rounded-xl animation-fade-in"
+              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}
+            >
+              <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm font-medium text-red-500 leading-snug">{error}</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <InputField label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} icon={Mail} autoComplete="email" />
+            <InputField label="Password" type="password" placeholder="••••••••" value={password} onChange={setPassword} icon={Lock} autoComplete="current-password" />
+
+            {/* Turnstile */}
+            <div
+              className="flex justify-center py-2 rounded-xl min-h-[68px]"
+              style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}
+            >
+              <Turnstile
+                key={turnstileKey}
+                siteKey={siteKey}
+                onSuccess={setTurnstileToken}
+                onError={() => setTurnstileToken('')}
+                onExpire={() => setTurnstileToken('')}
+                options={{ theme: 'auto', size: 'flexible' }}
+              />
+            </div>
+
+            <button
+              disabled={isSubmitting || !turnstileToken}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-sm font-bold transition-all disabled:opacity-50 active:scale-[0.98] mt-1 group"
+              style={{ background: isSubmitting ? 'var(--text-primary)' : 'var(--text-primary)', color: 'var(--bg)' }}
+              onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.background = 'var(--orange)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--text-primary)'; }}
+            >
+              {isSubmitting
+                ? <><Loader2 className="size-4 animate-spin" /> Signing in...</>
+                : <><LogIn className="size-4" /> Sign In</>
+              }
+            </button>
+          </form>
+
+          {/* Footer */}
+          <p className="text-center text-sm mt-6 pt-5" style={{ borderTop: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            No account?{' '}
+            <Link to="/register" className="font-bold hover:text-orange-500 transition-colors inline-flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>
+              Create one <ArrowRight className="size-3" />
+            </Link>
+          </p>
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 shadow-inner animation-fade-in">
-            <AlertCircle className="size-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400 font-bold leading-snug">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Routing Address</label>
-            <div className="relative group">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
-              <input required type="email" placeholder="entity@domain.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1">Cryptographic Key</label>
-            <div className="relative group">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
-              <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/50 transition-all shadow-inner placeholder:font-medium placeholder:text-zinc-500" />
-            </div>
-          </div>
-
-          <div className="flex justify-center py-2 min-h-[65px] bg-zinc-50 dark:bg-zinc-900/30 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <Turnstile
-              key={turnstileKey}
-              siteKey={siteKey}
-              onSuccess={(token) => setTurnstileToken(token)}
-              onError={() => setTurnstileToken('')}
-              onExpire={() => setTurnstileToken('')}
-              options={{ theme: 'auto', size: 'flexible' }}
-            />
-          </div>
-
-          <button disabled={isSubmitting || !turnstileToken} className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 mt-4 shadow-lg active:scale-[0.98]">
-            {isSubmitting ? <Loader2 className="size-5 animate-spin" /> : <LogIn className="size-5" />}
-            {isSubmitting ? 'Establishing Tunnel...' : 'Initialize Session'}
-          </button>
-        </form>
-
-        <footer className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-800">
-          Unregistered node? <Link to="/register" className="font-bold text-zinc-900 dark:text-white hover:text-orange-500 dark:hover:text-orange-400 transition-colors inline-flex items-center gap-1">Establish Vector <ArrowRight className="size-3" /></Link>
-        </footer>
       </div>
     </main>
   );
