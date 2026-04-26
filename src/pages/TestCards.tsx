@@ -69,9 +69,9 @@ export default function TestCards() {
 
   return (
     <div className="max-w-5xl mx-auto animation-fade-in">
-      <SeoHead title="Card Generator | DevKit" description="Generate Luhn-valid dummy credit card numbers for testing payment gateways." isTool={true} />
+      <SeoHead title="Card Generator | CC Generator" description="Generate Luhn-valid dummy credit card numbers for testing payment gateways." isTool={true} />
 
-      <ToolPageHeader badge="Generator" badgeIcon={Sparkles} title="Test Card Generator" description="Generate Luhn-valid dummy credit card numbers for Stripe, PayPal, Braintree, and other payment gateways." />
+      <ToolPageHeader badge="Generator" badgeIcon={Sparkles} title="CC Generator" description="Generate Luhn-valid dummy credit card numbers for Stripe, PayPal, Braintree, and other payment gateways." />
 
       <div className="grid lg:grid-cols-5 gap-6 mb-8">
         <ToolCard className="lg:col-span-2">
