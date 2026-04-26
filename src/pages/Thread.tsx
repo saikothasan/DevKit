@@ -16,7 +16,12 @@ const formatCategory = (cat: string) => {
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 };
 
-type Reply = { id: number; content: string; author: string; authorId: number; upvotes: number; isAcceptedAnswer?: boolean; createdAt: string; authorIsVip: boolean; authorRole: string; };
+type Reply = { 
+  id: number; content: string; author: string; authorId: number; 
+  upvotes: number; isAcceptedAnswer?: boolean; createdAt: string; 
+  authorIsVip: boolean; authorRole: string; 
+};
+
 type ThreadDetail = { 
   id: number; title: string; content: string; category: string; author: string; authorId: number; 
   upvotes: number; views: number; replyCount: number; isPinned: boolean; isLocked: boolean; createdAt: string; 
@@ -25,11 +30,15 @@ type ThreadDetail = {
   replies: Reply[]; 
 };
 
+type ApiError = { error?: string };
+type UnlockResponse = { success?: boolean; lockedContent?: string; error?: string };
+
 export default function Thread() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+  
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -41,9 +50,9 @@ export default function Thread() {
 
   const fetchThread = () => {
     fetch(`/api/forum/threads/${id}`)
-      .then(res => res.json() as Promise<ThreadDetail & { error?: string }>)
+      .then(res => res.json() as Promise<ThreadDetail & ApiError>)
       .then(data => { if (!data.error) setThread(data as ThreadDetail); })
-      .catch(console.error);
+      .catch(() => toast('Failed to synchronize thread telemetry.', 'error'));
   };
 
   useEffect(() => { fetchThread(); }, [id]);
@@ -53,44 +62,70 @@ export default function Thread() {
     if (!user) { toast("Authentication required to execute reputation protocol.", "error"); return; }
     if (user.id === authorId) { toast("Self-voting protocol is strictly rejected.", "error"); return; }
     
-    const res = await fetch(`/api/forum/vote/${type}/${targetId}`, { method: 'POST' });
-    if (res.ok) {
-        if (type === 'thread') {
-            setThread({ ...thread, upvotes: thread.upvotes + 1 });
-        } else {
-            setThread({ ...thread, replies: thread.replies.map(r => r.id === targetId ? { ...r, upvotes: r.upvotes + 1 } : r) });
-        }
-    } else {
-        const errorData = await res.json() as any;
-        toast(errorData.error || "Cannot process transaction at this time.", "error");
+    try {
+      const res = await fetch(`/api/forum/vote/${type}/${targetId}`, { method: 'POST' });
+      if (res.ok) {
+          if (type === 'thread') {
+              setThread(prev => prev ? { ...prev, upvotes: prev.upvotes + 1 } : prev);
+          } else {
+              setThread(prev => prev ? { ...prev, replies: prev.replies.map(r => r.id === targetId ? { ...r, upvotes: r.upvotes + 1 } : r) } : prev);
+          }
+      } else {
+          const errorData = await res.json() as ApiError;
+          toast(errorData.error || "Cannot process transaction at this time.", "error");
+      }
+    } catch (e) {
+      toast("Network failure during reputation execution.", "error");
     }
   };
 
   const handleModeration = async (action: 'pin' | 'lock' | 'delete') => {
     if (!thread) return;
+    
     if (action === 'delete') {
-      if (!confirm('Confirm permanent deletion of this vector? Irreversible.')) return;
-      await fetch(`/api/forum/threads/${thread.id}`, { method: 'DELETE' });
-      navigate('/forum');
+      if (!window.confirm('Confirm permanent deletion of this vector? Irreversible.')) return;
+      try {
+        const res = await fetch(`/api/forum/threads/${thread.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        toast('Vector permanently wiped.', 'success');
+        navigate('/forum');
+      } catch {
+        toast('Deletion sequence failed.', 'error');
+      }
       return;
     }
 
-    const res = await fetch(`/api/forum/threads/${thread.id}/${action}`, { method: 'PATCH' });
-    if (res.ok) {
-      const updated = await res.json() as ThreadDetail;
-      setThread({ ...thread, isPinned: updated.isPinned, isLocked: updated.isLocked });
+    try {
+      const res = await fetch(`/api/forum/threads/${thread.id}/${action}`, { method: 'PATCH' });
+      if (res.ok) {
+        const updated = await res.json() as ThreadDetail;
+        setThread(prev => prev ? { ...prev, isPinned: updated.isPinned, isLocked: updated.isLocked } : prev);
+        toast(`Thread ${action} status updated.`, 'success');
+      } else {
+        throw new Error();
+      }
+    } catch {
+      toast(`Failed to execute ${action} protocol.`, 'error');
     }
   };
 
   const handleDeleteReply = async (replyId: number) => {
-    if (!confirm('Permanently wipe this transmission?')) return;
-    const res = await fetch(`/api/forum/replies/${replyId}`, { method: 'DELETE' });
-    if (res.ok && thread) {
-      setThread({ 
-        ...thread, 
-        replyCount: thread.replyCount - 1, 
-        replies: thread.replies.filter(r => r.id !== replyId) 
-      });
+    if (!window.confirm('Permanently wipe this transmission?')) return;
+    try {
+      const res = await fetch(`/api/forum/replies/${replyId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setThread(prev => prev ? { 
+          ...prev, 
+          replyCount: prev.replyCount - 1, 
+          replies: prev.replies.filter(r => r.id !== replyId) 
+        } : prev);
+        toast('Transmission wiped.', 'success');
+      } else {
+        const data = await res.json() as ApiError;
+        throw new Error(data.error || 'Failed to wipe transmission.');
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Network execution failed.', 'error');
     }
   };
 
@@ -99,13 +134,20 @@ export default function Thread() {
     setIsUnlocking(true);
     try {
       const res = await fetch(`/api/forum/threads/${thread.id}/unlock`, { method: 'POST' });
-      const data = await res.json() as any;
-      if (data.success) {
-        setThread({ ...thread, lockedContent: data.lockedContent });
+      const data = await res.json() as UnlockResponse;
+      
+      if (res.ok && data.success) {
+        setThread(prev => prev ? { ...prev, lockedContent: data.lockedContent } : prev);
         await refreshUser();
         toast("Payload Decrypted and Secured.", "success");
-      } else toast(data.error || 'Decryption sequence failed.', 'error');
-    } finally { setIsUnlocking(false); }
+      } else {
+        toast(data.error || 'Decryption sequence failed.', 'error');
+      }
+    } catch {
+      toast('Network anomaly interrupted decryption.', 'error');
+    } finally { 
+      setIsUnlocking(false); 
+    }
   };
 
   const insertFormatting = (prefix: string, suffix: string) => {
@@ -115,6 +157,7 @@ export default function Thread() {
     const text = replyContent;
     const selected = text.substring(start, end) || 'text';
     const newText = text.substring(0, start) + prefix + selected + suffix + text.substring(end);
+    
     setReplyContent(newText);
     setTimeout(() => {
       textareaRef.current?.focus();
@@ -126,14 +169,27 @@ export default function Thread() {
     e.preventDefault();
     if (!user || !replyContent.trim()) return;
     setIsReplying(true);
-    await fetch(`/api/forum/threads/${id}/replies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: replyContent })
-    });
-    setReplyContent('');
-    setIsReplying(false);
-    fetchThread(); // Reloads full thread to grab accurate DB metrics
+    
+    try {
+      const res = await fetch(`/api/forum/threads/${id}/replies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: replyContent })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json() as ApiError;
+        throw new Error(errorData.error || 'Failed to transmit reply.');
+      }
+      
+      setReplyContent('');
+      fetchThread(); // Reloads full thread to grab accurate DB metrics
+      toast('Transmission appended to vector.', 'success');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'System fault during transmission.', 'error');
+    } finally {
+      setIsReplying(false);
+    }
   };
 
   if (!thread) return (
