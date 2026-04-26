@@ -69,7 +69,7 @@ export function MobileHeader() {
         <div className="flex h-16 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 px-5 bg-zinc-50/50 dark:bg-zinc-900/20">
           <NavLink to="/" className="flex items-center gap-3 font-black text-lg tracking-tight text-zinc-900 dark:text-white">
             <Logo className="size-6 text-orange-500 drop-shadow-sm" />
-            DevKit Pro
+            Visatk
           </NavLink>
           <button 
             onClick={() => setIsOpen(false)}
@@ -124,7 +124,7 @@ export function MobileHeader() {
                 <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity"><Crown className="size-20 text-orange-500" /></div>
                 <h4 className="text-white font-black text-sm mb-1 flex items-center gap-1.5 z-10 relative"><Zap className="size-4 text-amber-400" /> Unlock Elite Node</h4>
                 <p className="text-zinc-400 text-xs mb-4 z-10 relative leading-relaxed pr-4">Acquire lifetime priority execution and bypass all cryptographic locks.</p>
-                <Link to="/vip" onClick={() => setIsOpen(false)} className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white text-sm font-bold py-3 rounded-xl transition-colors z-10 relative shadow-md active:scale-[0.98]">Deploy VIP Protocol</Link>
+                <Link to="/vip" onClick={() => setIsOpen(false)} className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white text-sm font-bold py-3 rounded-xl transition-colors z-10 relative shadow-md active:scale-[0.98]">Upgrade VIP</Link>
               </div>
             </div>
           )}
@@ -154,7 +154,7 @@ export function MobileHeader() {
             </div>
           ) : (
             <NavLink to="/login" onClick={() => setIsOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3.5 text-sm font-bold text-zinc-50 hover:bg-orange-500 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-orange-500 dark:hover:text-white transition-all shadow-md active:scale-[0.98]">
-              <LogIn className="size-4" /> Initialize Connection
+              <LogIn className="size-4" /> Initialize Access
             </NavLink>
           )}
         </div>
