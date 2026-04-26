@@ -82,12 +82,18 @@ body {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#0a0a0a] transition-shadow;
   }
 
-  /* Critical for iOS / PWA native feel */
+  /* Critical for iOS / PWA native feel - Using exact viewport variables */
   .pb-safe {
-    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
   .pt-safe {
     padding-top: max(env(safe-area-inset-top), 0.5rem);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0rem);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0rem);
   }
   .mb-safe {
     margin-bottom: env(safe-area-inset-bottom);
