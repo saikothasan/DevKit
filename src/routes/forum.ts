@@ -25,16 +25,12 @@ const requireModerator = async (c: any, next: any) => {
   await next();
 };
 
-// ==========================================
-// Thread Indexing & Search Vector
-// ==========================================
-
 forumRouter.get('/threads', async (c) => {
   const db = drizzle(c.env.DB);
   const q = c.req.query('q');
   const category = c.req.query('category');
-  const page = Math.max(1, parseInt(c.req.query('page') || '1'));
-  const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '15')));
+  const page = Math.max(1, parseInt((c.req.query('page') || '1') as string));
+  const limit = Math.min(50, Math.max(1, parseInt((c.req.query('limit') || '15') as string)));
   const offset = (page - 1) * limit;
 
   const conditions = [];
@@ -57,7 +53,7 @@ forumRouter.get('/threads', async (c) => {
         authorId: threads.authorId,
         upvotes: threads.upvotes, 
         views: threads.views,
-        replyCount: threads.replyCount, // Added missing telemetry
+        replyCount: threads.replyCount,
         isPinned: threads.isPinned, 
         isLocked: threads.isLocked, 
         createdAt: threads.createdAt,
@@ -89,13 +85,9 @@ forumRouter.get('/threads', async (c) => {
   }
 });
 
-// ==========================================
-// Thread Detail & Decryption Logic
-// ==========================================
-
 forumRouter.get('/threads/:id', async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
 
   if (isNaN(threadId)) return c.json({ error: 'Malformed identifier.' }, 400);
 
@@ -108,7 +100,7 @@ forumRouter.get('/threads/:id', async (c) => {
     authorId: threads.authorId,
     upvotes: threads.upvotes,
     views: threads.views,
-    replyCount: threads.replyCount, // Added
+    replyCount: threads.replyCount,
     isPinned: threads.isPinned,
     isLocked: threads.isLocked,
     createdAt: threads.createdAt,
@@ -134,7 +126,7 @@ forumRouter.get('/threads/:id', async (c) => {
     author: replies.author,
     authorId: replies.authorId,
     upvotes: replies.upvotes,
-    isAcceptedAnswer: replies.isAcceptedAnswer, // Added
+    isAcceptedAnswer: replies.isAcceptedAnswer,
     createdAt: replies.createdAt,
     authorIsVip: users.isVip,
     authorRole: users.role
@@ -175,13 +167,9 @@ forumRouter.get('/threads/:id', async (c) => {
   });
 });
 
-// ==========================================
-// Thread Creation & Validation
-// ==========================================
-
 const createThreadSchema = z.object({ 
-  title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title exceeds maximum length'), 
-  content: z.string().min(10, 'Content must be at least 10 characters').max(20000, 'Payload too large'), 
+  title: z.string().min(5).max(100), 
+  content: z.string().min(10).max(20000), 
   category: z.string().min(2).max(30),
   lockedContent: z.string().max(20000).optional(),
   unlockCost: z.number().min(0).max(10000).default(0)
@@ -210,14 +198,10 @@ forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema)
   }
 });
 
-// ==========================================
-// Premium Unlock Vector (VIP Integrated)
-// ==========================================
-
 forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const userPayload = c.get('user');
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
 
   const user = await db.select({ id: users.id, points: users.points, role: users.role, isVip: users.isVip }).from(users).where(eq(users.id, userPayload.id)).get();
   if (!user) return c.json({ error: 'Identity node invalid' }, 401);
@@ -249,16 +233,12 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
   }
 });
 
-// ==========================================
-// Replies & Voting Execution
-// ==========================================
-
 const replySchema = z.object({ content: z.string().min(2).max(5000) });
 
 forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySchema), async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
   const { content } = c.req.valid('json');
 
   const thread = await db.select({ isLocked: threads.isLocked }).from(threads).where(eq(threads.id, threadId)).get();
@@ -268,7 +248,6 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
   try {
     const result = await db.insert(replies).values({ threadId, content, authorId: user.id, author: user.username }).returning();
     
-    // FIX: Increment thread reply count and user points in a batch to maintain integrity
     c.executionCtx.waitUntil(
       db.batch([
         db.update(users).set({ points: sql`${users.points} + 2` }).where(eq(users.id, user.id)),
@@ -285,8 +264,8 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
 forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const type = c.req.param('type');
-  const id = parseInt(c.req.param('id'));
+  const type = c.req.param('type') as string; // FIX
+  const id = parseInt(c.req.param('id') as string); // FIX
 
   if (isNaN(id) || (type !== 'thread' && type !== 'reply')) return c.json({ error: 'Invalid parameters' }, 400);
 
@@ -325,17 +304,15 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   }
 });
 
-// Moderation routes remaining unchanged...
 forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const replyId = parseInt(c.req.param('id'));
+  const replyId = parseInt(c.req.param('id') as string); // FIX
 
   const reply = await db.select().from(replies).where(eq(replies.id, replyId)).get();
   if (!reply) return c.json({ error: 'Reply not found' }, 404);
   if (reply.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
 
-  // Decrement thread reply count
   await db.batch([
     db.delete(replies).where(eq(replies.id, replyId)),
     db.update(threads).set({ replyCount: sql`${threads.replyCount} - 1` }).where(eq(threads.id, reply.threadId))
@@ -345,7 +322,7 @@ forumRouter.delete('/replies/:id', requireAuth, async (c) => {
 
 forumRouter.patch('/threads/:id/pin', requireAuth, requireModerator, async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
   const thread = await db.select({ isPinned: threads.isPinned }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
   const result = await db.update(threads).set({ isPinned: !thread.isPinned }).where(eq(threads.id, threadId)).returning();
@@ -354,7 +331,7 @@ forumRouter.patch('/threads/:id/pin', requireAuth, requireModerator, async (c) =
 
 forumRouter.patch('/threads/:id/lock', requireAuth, requireModerator, async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
   const thread = await db.select({ isLocked: threads.isLocked }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
   const result = await db.update(threads).set({ isLocked: !thread.isLocked }).where(eq(threads.id, threadId)).returning();
@@ -363,7 +340,7 @@ forumRouter.patch('/threads/:id/lock', requireAuth, requireModerator, async (c) 
 
 forumRouter.delete('/threads/:id', requireAuth, async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id'));
+  const threadId = parseInt(c.req.param('id') as string); // FIX
   const user = c.get('user');
   const thread = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
