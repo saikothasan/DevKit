@@ -66,7 +66,7 @@ export default function BinChecker() {
 
   return (
     <div className="max-w-5xl mx-auto animation-fade-in">
-      <SeoHead title="BIN Lookup | DevKit" description="Identify card brand, type, country, and issuing bank from BIN numbers." isTool={true} />
+      <SeoHead title="Lookup, Verify & Validate BIN - Bank Identification Number" description="Identify card brand, type, country, and issuing bank from BIN numbers." isTool={true} />
 
       <ToolPageHeader badge="Intelligence" badgeIcon={Database} title="BIN Lookup" description="Identify card brand, type, funding method, country, and issuing bank from BIN/IIN numbers." />
 
