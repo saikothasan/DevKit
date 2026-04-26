@@ -79,16 +79,19 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, turnstileToken }),
       });
-      // Handle deeply nested Zod validation errors safely
       const data = await response.json() as { error?: string | { issues?: { message: string }[] }; requiresVerification?: boolean };
       
       if (!response.ok) {
         setTurnstileToken('');
         setTurnstileKey(k => k + 1);
+        
         const errMessage = typeof data.error === 'object' && data.error?.issues 
           ? data.error.issues[0]?.message 
-          : data.error;
-        throw new Error(errMessage || 'Registration failed');
+          : typeof data.error === 'string' 
+            ? data.error 
+            : 'Registration failed';
+            
+        throw new Error(errMessage);
       }
       
       navigate('/verify-email');
@@ -128,7 +131,6 @@ export default function Register() {
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Join the community today</p>
           </div>
 
-          {/* GitHub */}
           <a href="/api/auth/github" className="w-full mb-5 flex items-center justify-center gap-3 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98]" style={{ background: '#24292e', color: '#fff' }}>
             <GitHubIcon className="size-4.5" /> Continue with GitHub
           </a>
@@ -157,7 +159,6 @@ export default function Register() {
               label="Email Address" type="email" placeholder="you@example.com" 
               value={email} onChange={setEmail} icon={Mail} autoComplete="email" 
             />
-            {/* UX Sync Fix: Updated hint to reflect Zod requirements */}
             <InputField 
               label="Password" type="password" placeholder="••••••••" 
               value={password} onChange={setPassword} icon={Lock} autoComplete="new-password" 
