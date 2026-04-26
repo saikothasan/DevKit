@@ -1,34 +1,41 @@
 import { Hono } from 'hono';
-import { drizzle } from 'drizzle-orm/d1';
 import { eq, or, and, desc, not, like, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { users, conversations, messages } from '@/db/schema';
 import { requireAuth } from './auth';
+import type { AppEnv } from '../index';
 
-export const chatRouter = new Hono<{ Bindings: { DB: D1Database }, Variables: { user: any } }>();
+export const chatRouter = new Hono<AppEnv>();
 
 chatRouter.get('/conversations', requireAuth, async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
+  const db = c.var.db;
+  const user = c.var.user!;
 
-  const userConvos = await db.select()
+  // O(1) query complexity replacing N+1 mapping
+  const userConvos = await db
+    .select({
+      id: conversations.id,
+      lastMessageAt: conversations.lastMessageAt,
+      targetUser: {
+        id: users.id,
+        username: users.username,
+        avatarUrl: users.avatarUrl
+      }
+    })
     .from(conversations)
-    .where(or(eq(conversations.user1Id, user.id), eq(conversations.user2Id, user.id)))
+    .innerJoin(users, or(
+      and(eq(conversations.user1Id, user.id), eq(users.id, conversations.user2Id)),
+      and(eq(conversations.user2Id, user.id), eq(users.id, conversations.user1Id))
+    ))
     .orderBy(desc(conversations.lastMessageAt));
 
-  const enriched = await Promise.all(userConvos.map(async (conv) => {
-    const targetId = conv.user1Id === user.id ? conv.user2Id : conv.user1Id;
-    const targetUser = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, targetId)).get();
-    return { ...conv, targetUser };
-  }));
-
-  return c.json(enriched);
+  return c.json(userConvos);
 });
 
 chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ targetUserId: z.number() })), async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
+  const db = c.var.db;
+  const user = c.var.user!;
   const { targetUserId } = c.req.valid('json');
 
   if (user.id === targetUserId) return c.json({ error: 'Loopback connections disabled' }, 400);
@@ -46,15 +53,14 @@ chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ tar
   }
 
   const targetUser = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, targetUserId)).get();
-  return c.json({ ...conv, targetUser });
+  return c.json({ id: conv.id, lastMessageAt: conv.lastMessageAt, targetUser });
 });
 
 chatRouter.get('/messages/:id', requireAuth, async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
+  const db = c.var.db;
+  const user = c.var.user!;
   const conversationId = parseInt(c.req.param('id'));
   
-  // Performance: Pagination to prevent edge timeout
   const limit = Math.min(100, parseInt(c.req.query('limit') || '50'));
   const offset = parseInt(c.req.query('offset') || '0');
   
@@ -63,7 +69,6 @@ chatRouter.get('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'Unauthorized Access' }, 403);
   }
 
-  // Fetch descending for pagination, then reverse for UI
   const history = await db.select()
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
@@ -75,20 +80,17 @@ chatRouter.get('/messages/:id', requireAuth, async (c) => {
 });
 
 chatRouter.get('/directory', requireAuth, async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
+  const db = c.var.db;
+  const user = c.var.user!;
   const q = c.req.query('q');
   
-  // Fix for TS2322: Build conditions array dynamically
   const conditions = [not(eq(users.id, user.id))];
-  
   if (q && q.trim().length > 0) {
     conditions.push(like(users.username, `%${q.trim()}%`));
   }
 
   const directory = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl })
     .from(users)
-    // Spread array into the and() function securely
     .where(and(...conditions))
     .limit(50);
     
@@ -98,8 +100,8 @@ chatRouter.get('/directory', requireAuth, async (c) => {
 chatRouter.post('/messages/:id', requireAuth, zValidator('json', z.object({
   content: z.string().optional(), fileUrl: z.string().nullable().optional(), fileName: z.string().nullable().optional(), fileType: z.string().nullable().optional()
 })), async (c) => {
-  const db = drizzle(c.env.DB);
-  const user = c.get('user');
+  const db = c.var.db;
+  const user = c.var.user!;
   const conversationId = parseInt(c.req.param('id'));
   const payload = c.req.valid('json');
 
