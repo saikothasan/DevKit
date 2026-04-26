@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Scale, ShieldAlert, AlertTriangle, FileText } from 'lucide-react';
+import { ArrowLeft, Scale, AlertTriangle } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
 
 export default function Terms() {
