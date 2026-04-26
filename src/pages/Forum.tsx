@@ -247,7 +247,6 @@ export default function Forum() {
                       to={`/forum/${thread.id}`}
                       className="group flex flex-col sm:flex-row gap-4 p-5 rounded-2xl transition-all duration-200 card-interactive thread-card"
                       style={{
-                        background: 'var(--surface)',
                         border: `1px solid ${thread.isPinned ? 'rgba(243,128,32,0.35)' : thread.authorIsVip ? 'rgba(245,158,11,0.2)' : 'var(--border)'}`,
                         background: thread.isPinned ? 'linear-gradient(135deg, rgba(243,128,32,0.04) 0%, var(--surface) 100%)' : 'var(--surface)',
                       } as React.CSSProperties}
