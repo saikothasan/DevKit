@@ -321,7 +321,7 @@ export default function Thread() {
         <ShieldAlert className="size-12 md:size-16 text-zinc-500 mx-auto mb-4 md:mb-6 opacity-50" />
         <h1 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4 text-[var(--text-primary)]">Target Vector Missing</h1>
         <p className="text-sm md:text-base text-[var(--text-secondary)] mb-6 md:mb-8 max-w-md mx-auto">The requested thread could not be located in the central database. It may have been relocated or wiped.</p>
-        <Link to="/forum" className="px-5 md:px-6 py-2.5 md:py-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-xl text-sm md:text-base text-[var(--text-primary)] hover:border-[var(--orange)] transition-colors inline-flex items-center gap-2 shadow-sm">
+        <Link to="/" className="px-5 md:px-6 py-2.5 md:py-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-xl text-sm md:text-base text-[var(--text-primary)] hover:border-[var(--orange)] transition-colors inline-flex items-center gap-2 shadow-sm">
             <ArrowLeft className="size-4" /> Return to Hub
         </Link>
     </div>
@@ -343,7 +343,7 @@ export default function Thread() {
       <SeoHead title={`${thread.title} - Forum`} description={thread.content.substring(0, 160)} />
       
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 mb-6 md:mb-8 border-b border-[var(--border)] pb-4 md:pb-6">
-        <Link to="/forum" className="inline-flex items-center justify-center sm:justify-start gap-2 px-4 md:px-5 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-xs md:text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--orange)] shadow-sm transition-all w-full sm:w-fit group">
+        <Link to="/" className="inline-flex items-center justify-center sm:justify-start gap-2 px-4 md:px-5 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-xs md:text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--orange)] shadow-sm transition-all w-full sm:w-fit group">
           <ArrowLeft className="size-4 group-hover:-translate-x-1 transition-transform shrink-0" /> Back to Board
         </Link>
         
