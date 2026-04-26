@@ -40,7 +40,7 @@ export function MobileHeader() {
         
         <NavLink to="/" className="flex items-center gap-2.5 font-black text-lg tracking-tight text-zinc-900 dark:text-white">
           <Logo className="size-6 text-orange-500 drop-shadow-sm" />
-          DevKit Pro
+          Visatk
         </NavLink>
         
         {user && (
