@@ -9,7 +9,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
         
         <div className="flex items-center gap-2">
-          <span className="badge-mono">© {new Date().getFullYear()} DevKit Pro</span>
+          <span className="badge-mono">© {new Date().getFullYear()} Visatk.us</span>
           <span className="hidden sm:inline">·</span>
           <span className="hidden sm:inline">All rights reserved</span>
         </div>
