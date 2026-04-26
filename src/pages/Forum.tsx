@@ -117,7 +117,7 @@ export default function Forum() {
   return (
     <div className="w-full animation-fade-in">
       <SeoHead
-        title="Community Hub | Forum"
+        title="Visatk | Community Forum"
         description="Exclusive technical methods, BIN lists, and secure infrastructure configurations."
       />
 
