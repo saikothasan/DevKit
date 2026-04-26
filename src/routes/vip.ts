@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
-import { drizzle } from 'drizzle-orm/d1';
 import { eq, sql } from 'drizzle-orm';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
 import { users, payments } from '@/db/schema';
 import { requireAuth } from './auth';
+import { timingSafeEqual } from '@/utils/crypto';
+import type { AppEnv } from '../index';
 
-export const vipRouter = new Hono<{ 
-  Bindings: { DB: D1Database; APIRONE_ACCOUNT: string; BASE_URL: string; };
-  Variables: { user: { id: number; username: string; role: string; exp: number; }; };
-}>();
+export const vipRouter = new Hono<AppEnv>();
 
 const VIP_FIAT_PRICE = 49.99;
 const CURRENCY_CONFIG: Record<string, number> = {
@@ -15,10 +15,14 @@ const CURRENCY_CONFIG: Record<string, number> = {
   'usdt@trx': 1000000, 'usdc@trx': 1000000, 'eth': 1000000000000000000, 'usdt@eth': 1000000,
 };
 
-vipRouter.post('/invoice', requireAuth, async (c) => {
-  const db = drizzle(c.env.DB);
-  const userPayload = c.get('user');
-  const { currency } = await c.req.json();
+const invoiceSchema = z.object({
+  currency: z.string().min(3).max(10)
+});
+
+vipRouter.post('/invoice', requireAuth, zValidator('json', invoiceSchema), async (c) => {
+  const db = c.var.db;
+  const userPayload = c.var.user!;
+  const { currency } = c.req.valid('json');
 
   if (!CURRENCY_CONFIG[currency]) return c.json({ error: 'Unsupported blockchain protocol.' }, 400);
 
@@ -63,20 +67,26 @@ vipRouter.post('/invoice', requireAuth, async (c) => {
   }
 });
 
-vipRouter.post('/webhook', async (c) => {
-  const db = drizzle(c.env.DB);
+const webhookSchema = z.object({
+  invoice: z.string().min(10),
+  status: z.string().min(2)
+});
+
+vipRouter.post('/webhook', zValidator('json', webhookSchema), async (c) => {
+  const db = c.var.db;
   const secret = c.req.query('secret');
   
+  if (!secret) return c.text('Missing cryptographic parameters', 400);
+
   try {
-    const body = await c.req.json();
-    const { invoice, status } = body;
-
-    if (!invoice || !status) return c.text('Malformed payload parameters', 400);
-
+    const { invoice, status } = c.req.valid('json');
     const tx = await db.select().from(payments).where(eq(payments.invoiceId, invoice)).get();
-    if (!tx || tx.secretToken !== secret) return c.text('Cryptographic signature validation failed', 403);
+    
+    // Constant-time execution check to prevent timing attacks
+    if (!tx || !timingSafeEqual(tx.secretToken, secret)) {
+      return c.text('Cryptographic signature validation failed', 403);
+    }
 
-    // Execution: Atomic transaction to prevent ledger mismatch
     if (status === 'paid' || status === 'completed') {
       await db.batch([
         db.update(payments).set({ status, updatedAt: sql`(strftime('%s', 'now'))` }).where(eq(payments.id, tx.id)),
