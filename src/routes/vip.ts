@@ -67,9 +67,10 @@ vipRouter.post('/invoice', requireAuth, zValidator('json', invoiceSchema), async
   }
 });
 
+// FIX: Refined Zod Schema to strictly map to the Drizzle SQLite literal union types
 const webhookSchema = z.object({
   invoice: z.string().min(10),
-  status: z.string().min(2)
+  status: z.enum(['created', 'paid', 'partpaid', 'completed', 'expired'])
 });
 
 vipRouter.post('/webhook', zValidator('json', webhookSchema), async (c) => {
@@ -87,6 +88,7 @@ vipRouter.post('/webhook', zValidator('json', webhookSchema), async (c) => {
       return c.text('Cryptographic signature validation failed', 403);
     }
 
+    // Execution: Atomic transaction
     if (status === 'paid' || status === 'completed') {
       await db.batch([
         db.update(payments).set({ status, updatedAt: sql`(strftime('%s', 'now'))` }).where(eq(payments.id, tx.id)),
