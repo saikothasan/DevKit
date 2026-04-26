@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { XCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { SeoHead } from '@/components/SeoHead';
@@ -9,6 +9,9 @@ export default function VerifyEmail() {
   
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Validating cryptographic array...');
+  
+  // High-level execution guard to prevent React 18 Strict Mode dual-firing race conditions
+  const hasAttempted = useRef(false);
 
   useEffect(() => {
     if (!token) {
@@ -16,6 +19,9 @@ export default function VerifyEmail() {
       setMessage('Null verification parameter detected.');
       return;
     }
+
+    if (hasAttempted.current) return;
+    hasAttempted.current = true;
 
     const verify = async () => {
       try {
