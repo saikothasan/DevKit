@@ -276,7 +276,7 @@ export default function Thread() {
               <p className="text-sm mt-2">Be the first entity to append to this vector.</p>
             </div>
           ) : (
-            thread.replies.map((reply, idx) => (
+            thread.replies.map(reply => (
               <article key={reply.id} className={`relative bg-white dark:bg-[#0a0a0a] border rounded-[2rem] p-6 md:p-10 ml-0 md:ml-16 flex flex-col sm:flex-row gap-8 transition-all hover:shadow-xl shadow-zinc-200/20 dark:shadow-black/20 ${reply.isAcceptedAnswer ? 'border-emerald-500/50 bg-emerald-50/30 dark:bg-emerald-500/5' : reply.authorIsVip ? 'border-amber-500/30' : 'border-zinc-200 dark:border-zinc-800 hover:border-orange-500/30'}`}>
                 
                 {reply.isAcceptedAnswer && (
