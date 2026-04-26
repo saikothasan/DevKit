@@ -17,9 +17,18 @@ export function MobileHeader() {
   useEffect(() => { setIsOpen(false); }, [location.pathname]);
 
   useEffect(() => {
-    if (isOpen) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = 'unset';
-    return () => { document.body.style.overflow = 'unset'; };
+    if (isOpen) {
+      // Prevent underlying body scroll when drawer is open
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => { 
+      document.body.style.overflow = ''; 
+      document.body.style.touchAction = ''; 
+    };
   }, [isOpen]);
 
   const handleLogout = async () => {
@@ -29,13 +38,13 @@ export function MobileHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-zinc-200/80 bg-white/80 backdrop-blur-xl px-4 dark:border-zinc-800/80 dark:bg-[#0a0a0a]/80 sm:px-6 md:hidden">
+      <header className="sticky top-0 z-40 flex h-16 pt-safe items-center gap-4 border-b border-zinc-200/80 bg-white/80 backdrop-blur-xl px-4 dark:border-zinc-800/80 dark:bg-[#0a0a0a]/80 sm:px-6 md:hidden">
         <button 
           onClick={() => setIsOpen(true)}
           className="inline-flex items-center justify-center rounded-xl p-2.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-50 focus-visible:outline-none transition-colors active:scale-95"
+          aria-label="Open Navigation Matrix"
         >
           <Menu className="size-5" />
-          <span className="sr-only">Expand Navigation Matrix</span>
         </button>
         
         <NavLink to="/" className="flex items-center gap-2.5 font-black text-lg tracking-tight text-zinc-900 dark:text-white">
@@ -61,12 +70,13 @@ export function MobileHeader() {
       <div 
         className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
+        aria-hidden="true"
       ></div>
       
-      {/* Execution Drawer */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-[85%] max-w-sm bg-white dark:bg-[#0a0a0a] shadow-2xl border-r border-zinc-200 dark:border-zinc-800 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Execution Drawer - Forced h-dvh for browser toolbar safety */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-[85%] max-w-sm h-dvh bg-white dark:bg-[#0a0a0a] shadow-2xl border-r border-zinc-200 dark:border-zinc-800 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
-        <div className="flex h-16 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 px-5 bg-zinc-50/50 dark:bg-zinc-900/20">
+        <div className="flex h-16 pt-safe items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 px-5 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
           <NavLink to="/" className="flex items-center gap-3 font-black text-lg tracking-tight text-zinc-900 dark:text-white">
             <Logo className="size-6 text-orange-500 drop-shadow-sm" />
             Visatk
@@ -74,14 +84,14 @@ export function MobileHeader() {
           <button 
             onClick={() => setIsOpen(false)}
             className="rounded-xl p-2 bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors active:scale-95 focus:outline-none border border-transparent dark:hover:border-zinc-700"
+            aria-label="Close menu"
           >
             <X className="size-5" />
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto py-6 px-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto py-6 px-4 custom-scrollbar pl-safe">
           <nav className="space-y-6">
-            
             <div>
               <div className="px-3 mb-2 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Execution Utilities</div>
               <div className="space-y-1">
@@ -117,7 +127,6 @@ export function MobileHeader() {
             </div>
           </nav>
 
-          {/* Dynamic VIP Upgrade Array */}
           {user && !user.isVip && (
             <div className="mt-8 px-1">
               <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-zinc-800 dark:to-zinc-900 p-5 rounded-2xl border border-zinc-700/50 shadow-xl relative overflow-hidden group">
@@ -130,8 +139,8 @@ export function MobileHeader() {
           )}
         </div>
 
-        {/* Persistent Authentication Block */}
-        <div className="mt-auto border-t border-zinc-200 dark:border-zinc-800/80 p-4 bg-zinc-50/50 dark:bg-zinc-900/20">
+        {/* Persistent Authentication Block with safe-area padding pb-safe */}
+        <div className="mt-auto border-t border-zinc-200 dark:border-zinc-800/80 p-4 pb-safe bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
           {isLoading ? (
             <div className="h-14 w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800/80"></div>
           ) : user ? (
