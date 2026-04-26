@@ -2,7 +2,7 @@ import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, count, and, sql, desc, gt } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/d1'; // FIX: Restored drizzle core import
+import { drizzle } from 'drizzle-orm/d1';
 import { sign, verify } from 'hono/jwt';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { users, turnstileEvents, threads, replies } from '@/db/schema';
@@ -182,9 +182,18 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
   const { token } = c.req.valid('json');
 
   const user = await db.select().from(users).where(eq(users.verificationToken, token)).get();
-  if (!user) return c.json({ error: 'Invalid or expired vector token.' }, 400);
+  
+  // Security protocol: By retaining the nullification constraint, we prevent single-use links
+  // from acting as continuous authentication bypass vectors.
+  if (!user) {
+    return c.json({ error: 'Invalid or already consumed vector token.' }, 400);
+  }
 
-  await db.update(users).set({ isVerified: true, verificationToken: null }).where(eq(users.id, user.id));
+  // Finalize verification state and instantly consume/nullify the token
+  await db.update(users).set({ 
+    isVerified: true, 
+    verificationToken: null 
+  }).where(eq(users.id, user.id));
 
   const payload = { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 604800 };
   const jwt = await sign(payload, getSecret(c), 'HS256');
