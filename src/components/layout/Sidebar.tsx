@@ -16,9 +16,10 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden md:flex h-full w-64 lg:w-72 flex-col border-r border-zinc-200 bg-white/80 dark:border-zinc-800/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl">
+    // Replaced h-full with h-dvh for absolute lock
+    <aside className="fixed inset-y-0 left-0 z-50 hidden md:flex h-dvh w-64 lg:w-72 flex-col border-r border-zinc-200 bg-white/80 dark:border-zinc-800/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl pt-safe pl-safe pb-safe">
       {/* Identity Node Header */}
-      <div className="flex h-16 items-center border-b border-zinc-200 dark:border-zinc-800/80 px-6">
+      <div className="flex h-16 items-center border-b border-zinc-200 dark:border-zinc-800/80 px-6 shrink-0">
         <NavLink to="/" className="flex items-center gap-3 font-black text-lg hover:opacity-80 transition-opacity tracking-tight text-zinc-900 dark:text-white">
           <Logo className="size-7 text-orange-500 drop-shadow-sm" />
           Visatk
@@ -78,7 +79,7 @@ export function Sidebar() {
       </div>
 
       {/* Persistent Authentication State Footer */}
-      <div className="p-4 border-t border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20">
+      <div className="p-4 border-t border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
         {isLoading ? (
           <div className="h-14 w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800/80"></div>
         ) : user ? (
