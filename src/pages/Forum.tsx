@@ -130,13 +130,13 @@ export default function Forum() {
               style={{ background: 'var(--orange-dim)', border: '1px solid var(--orange-border)', color: 'var(--orange)' }}
             >
               <Layers className="size-3" />
-              Discussion Board
+              Discussion
             </div>
             <h1
               className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-2"
               style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}
             >
-              Community Hub
+              Visatk
             </h1>
             <p className="text-sm sm:text-base" style={{ color: 'var(--text-secondary)' }}>
               Discover and discuss premium methods, configurations, and technical resources.
