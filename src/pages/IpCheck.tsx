@@ -90,12 +90,12 @@ export default function IpCheck() {
 
   return (
     <div className="max-w-5xl mx-auto animation-fade-in">
-      <SeoHead title="IP Analysis & Lookup | DevKit" description="Deep IP geolocation, ISP, proxy/VPN detection and risk scoring." isTool={true} />
+      <SeoHead title="IP Analysis & Lookup | What Is My IP Address" description="Deep IP geolocation, ISP, proxy/VPN detection and risk scoring." isTool={true} />
 
       <ToolPageHeader
         badge="Reconnaissance"
         badgeIcon={Radar}
-        title="IP Deep Analysis"
+        title="IP Address Lookup"
         description="Scan any IP address for geolocation, ASN mapping, and security threat intelligence."
       />
 
