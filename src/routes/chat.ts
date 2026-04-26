@@ -12,7 +12,6 @@ chatRouter.get('/conversations', requireAuth, async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
 
-  // O(1) query complexity replacing N+1 mapping
   const userConvos = await db
     .select({
       id: conversations.id,
@@ -59,10 +58,10 @@ chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ tar
 chatRouter.get('/messages/:id', requireAuth, async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
-  const conversationId = parseInt(c.req.param('id'));
+  const conversationId = parseInt(c.req.param('id') as string); // FIX
   
-  const limit = Math.min(100, parseInt(c.req.query('limit') || '50'));
-  const offset = parseInt(c.req.query('offset') || '0');
+  const limit = Math.min(100, parseInt((c.req.query('limit') || '50') as string));
+  const offset = parseInt((c.req.query('offset') || '0') as string);
   
   const conv = await db.select().from(conversations).where(eq(conversations.id, conversationId)).get();
   if (!conv || (conv.user1Id !== user.id && conv.user2Id !== user.id)) {
@@ -102,7 +101,7 @@ chatRouter.post('/messages/:id', requireAuth, zValidator('json', z.object({
 })), async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
-  const conversationId = parseInt(c.req.param('id'));
+  const conversationId = parseInt(c.req.param('id') as string); // FIX
   const payload = c.req.valid('json');
 
   if (!payload.content && !payload.fileUrl) return c.json({ error: 'Empty payload' }, 400);
