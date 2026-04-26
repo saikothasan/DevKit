@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { SeoHead } from '@/components/SeoHead';
-import { Square, CreditCard, Activity, Trash2, Search, Database, Globe, CheckCircle2, XCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Square, Trash2, Search, Database, CheckCircle2, XCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ToolPageHeader, ToolCard } from '@/components/ToolPageHeader';
 
 type CheckStatus = 'Found' | 'Not Found' | 'Error';
