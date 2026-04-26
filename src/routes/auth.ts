@@ -1,13 +1,14 @@
-import { Hono } from 'hono';
+import { Hono, Context, Next } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { drizzle } from 'drizzle-orm/d1';
 import { eq, count, and, sql, desc, gt } from 'drizzle-orm';
 import { sign, verify } from 'hono/jwt';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { users, turnstileEvents, threads, replies } from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/utils/crypto';
+import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
+// Strict Environment Binding
 export type AuthEnv = {
   Bindings: { 
     DB: D1Database; 
@@ -18,20 +19,24 @@ export type AuthEnv = {
     GITHUB_CLIENT_SECRET?: string;
     TURNSTILE_SECRET_KEY?: string;
   };
-  Variables: { user: { id: number; username: string; role: string; exp: number; }; };
+  Variables: { 
+    db: DrizzleD1Database; // Inherited from global middleware
+    user: { id: number; username: string; role: string; exp: number; }; 
+  };
 };
 
 export const authRouter = new Hono<AuthEnv>();
 
-const getSecret = (c: any): string => c.env.JWT_SECRET || 'super-secure-dev-secret-123';
+const getSecret = (c: Context<AuthEnv>): string => c.env.JWT_SECRET || 'super-secure-dev-secret-123';
 
-export const requireAuth = async (c: any, next: any) => {
+// Strictly typed middleware
+export const requireAuth = async (c: Context<AuthEnv>, next: Next) => {
   const token = getCookie(c, 'auth_token');
   if (!token) return c.json({ error: 'Unauthorized: Cryptographic token required.' }, 401);
 
   try {
     const payload = await verify(token, getSecret(c), 'HS256');
-    c.set('user', payload);
+    c.set('user', payload as AuthEnv['Variables']['user']);
     await next();
   } catch (err) {
     return c.json({ error: 'Unauthorized: Invalid or expired vector token.' }, 401);
@@ -46,8 +51,7 @@ const validateTurnstile = async (token: string, secret: string, ip: string) => {
 
   try {
     const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: formData
+      method: 'POST', body: formData
     });
     return await res.json() as { success: boolean; ephemeral_id?: string; metadata?: { ephemeral_id?: string }; };
   } catch {
@@ -91,7 +95,7 @@ const registerSchema = z.object({
 });
 
 authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB); // Fallback if middleware is skipped
   const { username, email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
@@ -154,7 +158,7 @@ authRouter.post('/login', zValidator('json', z.object({
   password: z.string(),
   turnstileToken: z.string().min(1)
 })), async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB);
   const { email, password, turnstileToken } = c.req.valid('json');
 
   const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
@@ -179,7 +183,7 @@ authRouter.post('/login', zValidator('json', z.object({
 });
 
 authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string() })), async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB);
   const { token } = c.req.valid('json');
 
   const user = await db.select().from(users).where(eq(users.verificationToken, token)).get();
@@ -194,12 +198,8 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
   return c.json({ success: true });
 });
 
-// ==========================================
-// Cryptographic Recovery Vectors
-// ==========================================
-
 authRouter.post('/forgot-password', zValidator('json', z.object({ email: z.string().email(), turnstileToken: z.string() })), async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB);
   const { email, turnstileToken } = c.req.valid('json');
   
   const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
@@ -208,10 +208,8 @@ authRouter.post('/forgot-password', zValidator('json', z.object({ email: z.strin
 
   const user = await db.select().from(users).where(eq(users.email, email)).get();
   
-  // Security: Prevent user enumeration
   if (!user) return c.json({ message: "If an account exists, a recovery sequence has been dispatched." });
 
-  // 32-byte entropy token
   const resetToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
   const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 Hour
 
@@ -241,7 +239,7 @@ authRouter.post('/reset-password', zValidator('json', z.object({
   token: z.string(), 
   newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Cryptographic strength insufficient") 
 })), async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB);
   const { token, newPassword } = c.req.valid('json');
 
   const now = new Date();
@@ -265,10 +263,6 @@ authRouter.post('/reset-password', zValidator('json', z.object({
 
   return c.json({ success: true, message: "Credentials re-keyed successfully." });
 });
-
-// ==========================================
-// OAuth Execution Vectors
-// ==========================================
 
 authRouter.get('/github', async (c) => {
   const clientId = c.env.GITHUB_CLIENT_ID;
@@ -302,7 +296,7 @@ authRouter.get('/github/callback', async (c) => {
     const primaryEmail = emails.find(e => e.primary && e.verified) || emails.find(e => e.verified) || emails[0];
     if (!primaryEmail || !primaryEmail.email) throw new Error('Verified email vector required.');
 
-    const db = drizzle(c.env.DB);
+    const db = c.var.db || drizzle(c.env.DB);
     let user = await db.select().from(users).where(eq(users.githubId, githubUser.id.toString())).get();
 
     if (!user) {
@@ -336,17 +330,13 @@ authRouter.post('/logout', async (c) => {
   return c.json({ success: true });
 });
 
-// ==========================================
-// Identity Retrieval Vectors
-// ==========================================
-
 authRouter.get('/me', async (c) => {
   const token = getCookie(c, 'auth_token');
   if (!token) return c.json({ user: null }, 401);
 
   try {
     const payload = await verify(token, getSecret(c), 'HS256');
-    const db = drizzle(c.env.DB);
+    const db = c.var.db || drizzle(c.env.DB);
     const user = await db.select().from(users).where(eq(users.id, payload.id as number)).get();
     
     if (!user) throw new Error('Identity missing');
@@ -358,7 +348,7 @@ authRouter.get('/me', async (c) => {
 });
 
 authRouter.get('/profile/:username', async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db || drizzle(c.env.DB);
   const targetUsername = c.req.param('username');
 
   try {
