@@ -52,8 +52,11 @@ export default function TestCards() {
       const data = await res.json() as { success?: boolean; cards?: CardData[]; metadata?: any; error?: string };
       if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed.');
       if (data.cards) { setCards(data.cards); if (data.metadata) setMetadata(data.metadata); }
-    } catch (err: any) { setError(err.message); }
-    finally { setIsLoading(false); }
+    } catch (err: unknown) { 
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.'); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const output = useMemo(() => {
@@ -71,32 +74,27 @@ export default function TestCards() {
       <ToolPageHeader badge="Generator" badgeIcon={Sparkles} title="Test Card Generator" description="Generate Luhn-valid dummy credit card numbers for Stripe, PayPal, Braintree, and other payment gateways." />
 
       <div className="grid lg:grid-cols-5 gap-6 mb-8">
-        {/* Config */}
         <ToolCard className="lg:col-span-2">
           <div className="p-5 space-y-5">
-            {/* BIN Input */}
             <div>
-              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>BIN / IIN</label>
+              <label className="badge-mono block mb-2 text-[var(--text-muted)]">BIN / IIN</label>
               <input
                 type="text"
                 value={bin}
                 onChange={e => setBin(e.target.value.replace(/\D/g, '').slice(0, 8))}
                 placeholder="424242"
                 maxLength={8}
-                className="w-full py-3 px-4 rounded-xl text-sm font-bold outline-none transition-all"
-                style={{ fontFamily: "'JetBrains Mono', monospace", background: 'var(--surface-raised)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
-                onFocus={e => { e.currentTarget.style.borderColor = 'var(--orange)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--orange-dim)'; }}
-                onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; }}
+                className="w-full py-3 px-4 rounded-xl text-sm font-bold outline-none transition-all bg-[var(--surface-raised)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-[var(--orange)] focus:shadow-[0_0_0_3px_var(--orange-dim)]"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
               />
               <div className="mt-2 flex items-center gap-2">
-                <CreditCard className="size-3.5" style={{ color: 'var(--text-muted)' }} />
+                <CreditCard className="size-3.5 text-[var(--text-muted)]" />
                 <span className="badge-mono text-orange-500">{detectedNetwork}</span>
               </div>
             </div>
 
-            {/* Presets */}
             <div>
-              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>Quick Presets</label>
+              <label className="badge-mono block mb-2 text-[var(--text-muted)]">Quick Presets</label>
               <div className="grid grid-cols-2 gap-1.5">
                 {PRESET_BINS.map(p => (
                   <button
@@ -116,10 +114,9 @@ export default function TestCards() {
               </div>
             </div>
 
-            {/* Quantity */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="badge-mono" style={{ color: 'var(--text-muted)' }}>Quantity</label>
+                <label className="badge-mono text-[var(--text-muted)]">Quantity</label>
                 <span className="badge-mono text-orange-500">{quantity}</span>
               </div>
               <input
@@ -127,19 +124,18 @@ export default function TestCards() {
                 onChange={e => setQuantity(Number(e.target.value))}
                 className="w-full accent-orange-500"
               />
-              <div className="flex justify-between badge-mono mt-1" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+              <div className="flex justify-between badge-mono mt-1 text-[var(--text-muted)] text-[10px]">
                 <span>1</span><span>100</span>
               </div>
             </div>
 
-            {/* Format */}
             <div>
-              <label className="badge-mono block mb-2" style={{ color: 'var(--text-muted)' }}>Export Format</label>
+              <label className="badge-mono block mb-2 text-[var(--text-muted)]">Export Format</label>
               <div className="grid grid-cols-3 gap-1.5">
-                {([['pipe', 'Pipe', FileText], ['json', 'JSON', FileJson], ['csv', 'CSV', Code2]] as [ExportFormat, string, any][]).map(([id, label, Icon]) => (
+                {([['pipe', 'Pipe', FileText], ['json', 'JSON', FileJson], ['csv', 'CSV', Code2]] as const).map(([id, label, Icon]) => (
                   <button
                     key={id}
-                    onClick={() => setFormat(id)}
+                    onClick={() => setFormat(id as ExportFormat)}
                     className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-bold transition-all"
                     style={{
                       background: format === id ? 'var(--orange-dim)' : 'var(--surface-raised)',
@@ -154,7 +150,7 @@ export default function TestCards() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
                 <AlertCircle className="size-4 text-red-500 shrink-0" />
                 <p className="text-sm text-red-500">{error}</p>
               </div>
@@ -163,27 +159,24 @@ export default function TestCards() {
             <button
               onClick={handleGenerate}
               disabled={isLoading || !bin.trim()}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 active:scale-[0.98]"
-              style={{ background: 'var(--orange)', color: '#fff' }}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 active:scale-[0.98] bg-[var(--orange)] text-white"
             >
               {isLoading ? <><RefreshCw className="size-4 animate-spin" /> Generating...</> : <><Sparkles className="size-4" /> Generate {quantity} Cards</>}
             </button>
           </div>
         </ToolCard>
 
-        {/* Output */}
         <ToolCard className="lg:col-span-3">
           <div className="p-5 h-full flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>Generated Cards</h3>
-                {metadata && <p className="badge-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{metadata.networkDetected} · {metadata.vectorLength} digits</p>}
+                <h3 className="font-bold text-sm text-[var(--text-primary)]" style={{ fontFamily: 'Syne, sans-serif' }}>Generated Cards</h3>
+                {metadata && <p className="badge-mono text-[10px] text-[var(--text-muted)]">{metadata.networkDetected} · {metadata.vectorLength} digits</p>}
               </div>
               {output && (
                 <button
                   onClick={() => copy(output)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  style={{ background: 'var(--orange-dim)', border: '1px solid var(--orange-border)', color: 'var(--orange)' }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-[var(--orange-dim)] border border-[var(--orange-border)] text-[var(--orange)]"
                 >
                   {copiedText === output ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                   {copiedText === output ? 'Copied!' : 'Copy All'}
@@ -194,11 +187,9 @@ export default function TestCards() {
               readOnly
               value={output || 'Generated cards will appear here...'}
               rows={18}
-              className="flex-1 w-full rounded-xl p-4 text-xs outline-none resize-none custom-scrollbar"
+              className="flex-1 w-full rounded-xl p-4 text-xs outline-none resize-none custom-scrollbar bg-[var(--surface-raised)] border border-[var(--border)]"
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                background: 'var(--surface-raised)',
-                border: '1px solid var(--border)',
                 color: output ? 'var(--text-primary)' : 'var(--text-muted)',
                 lineHeight: '1.8',
               }}
@@ -207,17 +198,16 @@ export default function TestCards() {
         </ToolCard>
       </div>
 
-      {/* FAQ */}
       <div className="space-y-3">
-        <h3 className="font-bold text-lg mb-4" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>FAQ</h3>
+        <h3 className="font-bold text-lg mb-4 text-[var(--text-primary)]" style={{ fontFamily: 'Syne, sans-serif' }}>FAQ</h3>
         {FAQ_DATA.map((item, i) => (
-          <div key={i} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-            <button onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-sm" style={{ background: 'var(--surface)', color: 'var(--text-primary)' }}>
+          <div key={i} className="rounded-xl overflow-hidden border border-[var(--border)]">
+            <button onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-sm bg-[var(--surface)] text-[var(--text-primary)]">
               {item.q}
-              <ChevronDown className={`size-4 shrink-0 transition-transform ${faqOpen === i ? 'rotate-180' : ''}`} style={{ color: 'var(--text-muted)' }} />
+              <ChevronDown className={`size-4 shrink-0 transition-transform ${faqOpen === i ? 'rotate-180' : ''} text-[var(--text-muted)]`} />
             </button>
             {faqOpen === i && (
-              <div className="px-5 pb-4 text-sm leading-relaxed" style={{ background: 'var(--surface-raised)', borderTop: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+              <div className="px-5 pb-4 text-sm leading-relaxed bg-[var(--surface-raised)] border-t border-[var(--border)] text-[var(--text-secondary)]">
                 {item.a}
               </div>
             )}
