@@ -65,9 +65,9 @@ const sendVerificationEmail = async (email: string, token: string, apiKey: strin
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: fromEmail || 'Security Protocol <noreply@devkit.local>', 
+      from: fromEmail || 'Visatk <no-reply@ser.visatk.us>', 
       to: [email],
-      subject: 'Architecture Hub - Identity Verification',
+      subject: 'Visatk - Identity Verification',
       html: `
         <div style="font-family: monospace; max-width: 600px; margin: 0 auto; padding: 24px; background: #0a0a0a; color: #e4e4e7; border: 1px solid #27272a; border-radius: 12px;">
           <h2 style="color: #fff; margin-bottom: 16px; font-weight: 800; border-bottom: 1px solid #27272a; padding-bottom: 12px;">Vector Initialization</h2>
@@ -218,7 +218,7 @@ authRouter.post('/forgot-password', zValidator('json', z.object({ email: z.strin
         method: 'POST',
         headers: { 'Authorization': `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: c.env.RESEND_FROM_EMAIL || 'Security <noreply@visatk.us>',
+          from: c.env.RESEND_FROM_EMAIL || 'Visatk <no-reply@ser.visatk.us>',
           to: [email],
           subject: 'Cryptographic Credential Reset',
           html: `<p>A secure reset request was initiated. <a href="${resetUrl}">Click here to re-key your credentials.</a> The link expires in 1 hour.</p>`
