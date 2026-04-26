@@ -21,7 +21,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center border-b border-zinc-200 dark:border-zinc-800/80 px-6">
         <NavLink to="/" className="flex items-center gap-3 font-black text-lg hover:opacity-80 transition-opacity tracking-tight text-zinc-900 dark:text-white">
           <Logo className="size-7 text-orange-500 drop-shadow-sm" />
-          DevKit Pro
+          Visatk
         </NavLink>
       </div>
       
@@ -30,7 +30,7 @@ export function Sidebar() {
         <nav className="space-y-6">
           
           <div>
-            <div className="px-3 mb-2 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Execution Utilities</div>
+            <div className="px-3 mb-2 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Utilities</div>
             <div className="space-y-1">
               {utilities.map(({ to, icon: Icon, label, external }) => (
                 external ? (
@@ -71,7 +71,7 @@ export function Sidebar() {
               <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity"><Crown className="size-16 text-orange-500" /></div>
               <h4 className="text-white font-black text-sm mb-1 flex items-center gap-1.5 z-10 relative"><Zap className="size-3.5 text-amber-400" /> Unlock Elite Node</h4>
               <p className="text-zinc-400 text-xs mb-3 z-10 relative leading-relaxed">Acquire lifetime priority bypassing execution.</p>
-              <Link to="/vip" className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold py-2.5 rounded-lg transition-colors z-10 relative shadow-md">Deploy VIP Protocol</Link>
+              <Link to="/vip" className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold py-2.5 rounded-lg transition-colors z-10 relative shadow-md">Upgrade VIP</Link>
             </div>
           </div>
         )}
