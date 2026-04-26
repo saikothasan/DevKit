@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { cors } from 'hono/cors';
 import { cache } from 'hono/cache';
-import { drizzle } from 'drizzle-orm/d1';
+import { drizzle, DrizzleD1Database } from 'drizzle-orm/d1';
 import { desc } from 'drizzle-orm';
 
 import { threads } from './db/schema';
@@ -26,9 +26,21 @@ export type AppEnv = {
     APIRONE_ACCOUNT: string;
     BASE_URL: string;
   };
+  Variables: {
+    db: DrizzleD1Database;
+    reqId: string;
+    user?: { id: number; username: string; role: string; exp: number; };
+  };
 };
 
 const app = new Hono<AppEnv>();
+
+// Edge Observability & Resource Lifecycle Middleware
+app.use('*', async (c, next) => {
+  c.set('reqId', crypto.randomUUID());
+  c.set('db', drizzle(c.env.DB)); // Single instantiation per request vector
+  await next();
+});
 
 app.use('*', secureHeaders({
   xXssProtection: '1; mode=block',
@@ -50,32 +62,43 @@ app.route('/api/chat', chatRouter);
 app.route('/api/upload', uploadRouter);
 app.route('/api/vip', vipRouter);
 
+// Global Error boundaries
+app.onError((err, c) => {
+  console.error(`[${c.var.reqId}] Execution Fault:`, err);
+  return c.json({ error: 'Internal Edge Execution Failure.', reqId: c.var.reqId }, 500);
+});
+
+app.notFound((c) => {
+  return c.json({ error: 'Endpoint untraceable.', reqId: c.var.reqId }, 404);
+});
+
 app.get('/robots.txt', cache({ cacheName: 'seo-cache', cacheControl: 'max-age=86400' }), (c) => {
-  return c.text(
-    'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?token=*\nSitemap: https://visatk.us/sitemap.xml'
-  );
+  return c.text('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?token=*\nSitemap: https://visatk.us/sitemap.xml');
 });
 
 app.get('/sitemap.xml', async (c) => {
-  const db = drizzle(c.env.DB);
+  const db = c.var.db;
   const recentThreads = await db
     .select({ id: threads.id, updatedAt: threads.updatedAt })
     .from(threads)
     .orderBy(desc(threads.updatedAt))
     .limit(1000);
 
-  const staticRoutes = ['', '/bin-checker', '/card-checker', '/fake-address', '/', '/vip'];
+  const staticRoutes = ['', '/bin-checker', '/card-checker', '/fake-address', '/vip'];
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  
   staticRoutes.forEach((route) => {
     xml += `  <url>\n    <loc>https://visatk.us${route}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
   });
+  
   recentThreads.forEach((thread) => {
     const date = thread.updatedAt ? new Date(thread.updatedAt).toISOString() : new Date().toISOString();
     xml += `  <url>\n    <loc>https://visatk.us/forum/thread/${thread.id}</loc>\n    <lastmod>${date}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
   });
   xml += '</urlset>';
+  
   c.header('Content-Type', 'application/xml');
-  c.header('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+  c.header('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
   return c.body(xml);
 });
 
