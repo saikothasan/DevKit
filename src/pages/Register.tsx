@@ -79,15 +79,21 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, turnstileToken }),
       });
-      const data = await response.json() as any;
+      // Handle deeply nested Zod validation errors safely
+      const data = await response.json() as { error?: string | { issues?: { message: string }[] }; requiresVerification?: boolean };
+      
       if (!response.ok) {
         setTurnstileToken('');
         setTurnstileKey(k => k + 1);
-        throw new Error(data.error?.issues?.[0]?.message || data.error || 'Registration failed');
+        const errMessage = typeof data.error === 'object' && data.error?.issues 
+          ? data.error.issues[0]?.message 
+          : data.error;
+        throw new Error(errMessage || 'Registration failed');
       }
+      
       navigate('/verify-email');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected execution failure occurred.');
     } finally {
       setIsLoading(false);
     }
@@ -142,9 +148,21 @@ export default function Register() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <InputField label="Username" type="text" placeholder="your_username" value={username} onChange={setUsername} icon={User} autoComplete="username" hint="Letters, numbers, underscores only" />
-            <InputField label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} icon={Mail} autoComplete="email" />
-            <InputField label="Password" type="password" placeholder="••••••••" value={password} onChange={setPassword} icon={Lock} autoComplete="new-password" hint="Minimum 8 characters" />
+            <InputField 
+              label="Username" type="text" placeholder="your_username" value={username} 
+              onChange={setUsername} icon={User} autoComplete="username" 
+              hint="Letters, numbers, underscores only" 
+            />
+            <InputField 
+              label="Email Address" type="email" placeholder="you@example.com" 
+              value={email} onChange={setEmail} icon={Mail} autoComplete="email" 
+            />
+            {/* UX Sync Fix: Updated hint to reflect Zod requirements */}
+            <InputField 
+              label="Password" type="password" placeholder="••••••••" 
+              value={password} onChange={setPassword} icon={Lock} autoComplete="new-password" 
+              hint="Min 8 chars (Requires 1 uppercase, 1 lowercase, 1 number)" 
+            />
 
             <div className="flex justify-center py-2 rounded-xl min-h-[68px]" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}>
               <Turnstile key={turnstileKey} siteKey={siteKey} onSuccess={setTurnstileToken} onError={() => setTurnstileToken('')} onExpire={() => setTurnstileToken('')} options={{ theme: 'auto', size: 'flexible' }} />
