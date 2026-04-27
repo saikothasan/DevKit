@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 export const toolsRouter = new Hono();
 
+// ==========================================
+// 1. Interfaces & Type Definitions
+// ==========================================
+
 interface CardSpecs {
   network: string;
   length: number;
@@ -30,11 +34,46 @@ interface StripeMetadataResponse {
   }>;
 }
 
-const generateCardsSchema = z.object({
-  bin: z.string().min(1).max(19).regex(/^[0-9]+$/),
-  quantity: z.number().min(1).max(500).default(10)
-});
+// ==========================================
+// 2. Cryptographic & Algorithmic Utilities
+// ==========================================
 
+/**
+ * Executes a Cryptographically Secure Pseudo-Random Number Generator (CSPRNG).
+ * Utilizes Uint32Array to eliminate the modulo bias inherent in standard 8-bit arrays.
+ */
+function getSecureRandomInt(min: number, max: number): number {
+  const range = max - min + 1;
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return min + (array[0] % range);
+}
+
+/**
+ * Calculates the exact Luhn Check Digit (Modulus 10) for a given numeric vector.
+ */
+function calculateLuhnCheckDigit(partialCardNumber: string): number {
+  let sum = 0;
+  let isEven = true; // Processing from right to left (excluding the missing check digit)
+
+  for (let i = partialCardNumber.length - 1; i >= 0; i--) {
+    let digit = parseInt(partialCardNumber.charAt(i), 10);
+    
+    if (isEven) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    
+    sum += digit;
+    isEven = !isEven;
+  }
+
+  return (10 - (sum % 10)) % 10;
+}
+
+/**
+ * Maps standard Bank Identification Numbers to their authoritative network specifications.
+ */
 function getCardNetworkSpecs(bin: string): CardSpecs {
   if (/^3[47]/.test(bin)) return { network: 'American Express', length: 15, cvvLength: 4 };
   if (/^5[1-5]/.test(bin) || /^2(2[2-9][1-9]|2[3-9]\d{2}|[3-6]\d{3}|7[0-1]\d{2}|720)/.test(bin)) return { network: 'Mastercard', length: 16, cvvLength: 3 };
@@ -47,12 +86,14 @@ function getCardNetworkSpecs(bin: string): CardSpecs {
   return { network: 'Unknown', length: 16, cvvLength: 3 };
 }
 
-function getSecureRandomInt(min: number, max: number): number {
-  const range = max - min + 1;
-  const array = new Uint8Array(1);
-  crypto.getRandomValues(array);
-  return min + (array[0] % range);
-}
+// ==========================================
+// 3. Tool Execution Endpoints
+// ==========================================
+
+const generateCardsSchema = z.object({
+  bin: z.string().min(6).max(16).regex(/^[0-9]+$/, "BIN format strictly constrained to numerics"),
+  quantity: z.coerce.number().int().min(1).max(500).default(10)
+});
 
 toolsRouter.post('/generate-cards', zValidator('json', generateCardsSchema), (c) => {
   const { bin, quantity } = c.req.valid('json');
@@ -61,31 +102,30 @@ toolsRouter.post('/generate-cards', zValidator('json', generateCardsSchema), (c)
   const generatedCards: GeneratedCard[] = [];
   
   for (let i = 0; i < quantity; i++) {
-    let num = bin;
-    while(num.length < specs.length - 1) num += Math.floor(Math.random() * 10).toString();
+    // Stage 1: Seed partial payload based on BIN
+    let partialNum = bin;
     
-    let sum = 0;
-    let isEven = true; 
-    for (let j = num.length - 1; j >= 0; j--) {
-      let digit = parseInt(num.charAt(j), 10);
-      if (isEven) { digit *= 2; if (digit > 9) digit -= 9; }
-      sum += digit;
-      isEven = !isEven;
+    // Stage 2: Pad cryptographically secure digits up to (Length - 1)
+    while (partialNum.length < specs.length - 1) {
+      partialNum += getSecureRandomInt(0, 9).toString();
     }
-    const checkDigit = (10 - (sum % 10)) % 10;
-    num += checkDigit.toString();
+    
+    // Stage 3: Calculate and append verified Modulus 10 Check Digit
+    const checkDigit = calculateLuhnCheckDigit(partialNum);
+    const finalNumber = partialNum + checkDigit.toString();
 
+    // Stage 4: Generate contextual metadata (Expiry & CVV)
     const month = String(getSecureRandomInt(1, 12)).padStart(2, '0');
     const year = String(currentYear + getSecureRandomInt(1, 5));
     const cvv = Array.from({ length: specs.cvvLength }, () => getSecureRandomInt(0, 9)).join('');
 
     generatedCards.push({ 
       network: specs.network, 
-      number: num, 
+      number: finalNumber, 
       expMonth: month, 
       expYear: year, 
       cvv, 
-      formattedString: `${num}|${month}|${year}|${cvv}` 
+      formattedString: `${finalNumber}|${month}|${year}|${cvv}` 
     });
   }
 
@@ -97,7 +137,7 @@ toolsRouter.post('/generate-cards', zValidator('json', generateCardsSchema), (c)
 });
 
 const checkCardSchema = z.object({
-  cardPayload: z.string().min(10, "Payload too short")
+  cardPayload: z.string().min(10, "Payload length insufficient for analysis")
 });
 
 toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) => {
@@ -109,46 +149,51 @@ toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) =
 
   let binInfoString = 'Unknown Network';
 
+  // BIN Resolution Vector
   if (bin.length >= 6) {
     try {
-      const binResponse = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500); // Prevent node locking
+      
+      const binResponse = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (binResponse.ok) {
         const binData = await binResponse.json() as StripeMetadataResponse;
         if (binData?.data && binData.data.length > 0) {
           const meta = binData.data[0];
-          binInfoString = `${meta.brand || ''} - ${meta.funding || ''} - ${meta.country || ''}`;
+          binInfoString = `${meta.brand || 'UNKNOWN'} - ${meta.funding || 'UNKNOWN'} - ${meta.country || 'UNKNOWN'}`;
         }
       }
     } catch (e) {
-      // Silently fail BIN lookup if network issues occur
+      // Silently degrade if Stripe edge API rate-limits the node
+      console.error(`[Edge Vector] BIN resolution suppressed: ${e}`);
     }
   }
 
+  // Gateway Simulation Vector
   try {
     const params = new URLSearchParams();
     params.append('data', cardPayload);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const checkResponse = await fetch("https://mock.payate.com/api.php", {
       headers: {
         "accept": "*/*",
-        "accept-language": "en-US,en;q=0.9",
         "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "priority": "u=1, i",
-        "sec-ch-ua": "\"Not(A:Brand\";v=\"8\", \"Chromium\";v=\"144\", \"Google Chrome\";v=\"144\"",
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
         "x-requested-with": "XMLHttpRequest",
         "Referer": "https://mock.payate.com/"
       },
       body: params.toString(),
-      method: "POST"
+      method: "POST",
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const gatewayData = await checkResponse.json() as { error: number; msg: string };
-    const cleanMsg = gatewayData.msg ? gatewayData.msg.replace(/<[^>]*>?/gm, '').trim() : 'No response data';
+    const cleanMsg = gatewayData.msg ? gatewayData.msg.replace(/<[^>]*>?/gm, '').trim() : 'Execution completed without response data';
 
     let statusString = 'Unknown';
     if (gatewayData.error === 1) statusString = 'Live';
@@ -167,19 +212,26 @@ toolsRouter.post('/check-card', zValidator('json', checkCardSchema), async (c) =
     return c.json({ 
       success: false, 
       status: 'Error', 
-      message: 'Gateway execution failed',
-      formattedOutput: `${cardPayload} BIN Info: <${binInfoString}> - Connection Error`
-    });
+      message: 'Gateway execution timed out or failed to resolve connection.',
+      formattedOutput: `${cardPayload} BIN Info: <${binInfoString}> - Connection Fault`
+    }, 502);
   }
 });
 
-const checkBinSchema = z.object({ bin: z.string().min(6).max(19).regex(/^[0-9]+$/) });
+const checkBinSchema = z.object({ 
+  bin: z.string().min(6).max(16).regex(/^[0-9]+$/, "BIN format strictly constrained to numerics") 
+});
 
 toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => {
   const { bin } = c.req.valid('json');
   try {
-    const response = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`);
-    if (!response.ok) return c.json({ success: false, message: 'Failed to query metadata' });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(`https://api.stripe.com/edge-internal/card-metadata?bin_prefix=${bin}&key=pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return c.json({ success: false, message: 'Upstream metadata oracle rejected the query' }, 502);
     
     const data = await response.json() as StripeMetadataResponse;
     
@@ -190,17 +242,20 @@ toolsRouter.post('/check-bin', zValidator('json', checkBinSchema), async (c) => 
         fullResponse: data
       });
     }
-    return c.json({ success: false, message: 'BIN not found' });
+    return c.json({ success: false, message: 'BIN unregistered in global ledger' }, 404);
   } catch (error) {
-    return c.json({ success: false, message: 'Network execution failed' });
+    return c.json({ success: false, message: 'Network execution failed or timed out' }, 504);
   }
 });
 
-const checkIpSchema = z.object({ ip: z.string().optional() });
+const checkIpSchema = z.object({ 
+  ip: z.string().optional() 
+});
 
 toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
   let { ip } = c.req.valid('json');
   
+  // IP Extraction Fallback Vector
   if (!ip || ip.trim() === '') {
     const rawIp = c.req.header('CF-Connecting-IP') || c.req.header('x-forwarded-for') || '1.1.1.1';
     ip = rawIp.split(',')[0].trim();
@@ -210,23 +265,29 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
     let ipInfo: any = null;
     let fallbackUsed = false;
 
-    // Primary Execution: ip-api.com
+    // Execution Stage 1: Primary Oracle (ip-api.com)
     try {
-      const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,continent,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,mobile,proxy,hosting`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (ipApiRes.ok) {
         const data = await ipApiRes.json() as any;
-        if (data.status === 'success') {
-          ipInfo = data;
-        }
+        if (data.status === 'success') ipInfo = data;
       }
     } catch (e) {
-      // Primary provider failed, failover to secondary
+      console.warn('[Edge Vector] IP-API timeout, failing over to secondary oracle.');
     }
 
-    // Secondary Execution: ipwho.is (Robust Fallback)
+    // Execution Stage 2: Secondary Oracle (ipwho.is)
     if (!ipInfo) {
       try {
-        const ipWhoRes = await fetch(`https://ipwho.is/${ip}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const ipWhoRes = await fetch(`https://ipwho.is/${ip}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (ipWhoRes.ok) {
           const data = await ipWhoRes.json() as any;
           if (data.success) {
@@ -252,7 +313,7 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
           }
         }
       } catch (e) {
-        // Total provider failure
+        // Total oracle failure
       }
     }
 
@@ -260,10 +321,14 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
       return c.json({ success: false, message: 'All upstream Geo-IP providers rejected the connection or rate-limited the node.' }, 502);
     }
 
-    // Proxy/VPN & Threat Risk analysis over HTTPS
+    // Execution Stage 3: Proxy & VPN Threat Analysis
     let proxyData: any = {};
     try {
-      const proxyCheckRes = await fetch(`https://proxycheck.io/v2/${ip}?vpn=1&asn=1&risk=1`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const proxyCheckRes = await fetch(`https://proxycheck.io/v2/${ip}?vpn=1&asn=1&risk=1`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (proxyCheckRes.ok) {
         const proxyCheck = await proxyCheckRes.json() as any;
         proxyData = proxyCheck[ip] || {};
@@ -303,6 +368,6 @@ toolsRouter.post('/check-ip', zValidator('json', checkIpSchema), async (c) => {
 
     return c.json({ success: true, data });
   } catch (error) {
-    return c.json({ success: false, message: 'Execution timeout during IP analysis.' }, 500);
+    return c.json({ success: false, message: 'Execution timeout during IP analysis sequence.' }, 500);
   }
 });
