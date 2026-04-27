@@ -76,6 +76,17 @@ app.get('/robots.txt', cache({ cacheName: 'seo-cache', cacheControl: 'max-age=86
   return c.text('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?token=*\nSitemap: https://visatk.us/sitemap.xml');
 });
 
+const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, (char) => {
+  switch (char) {
+    case '<': return '&lt;';
+    case '>': return '&gt;';
+    case '&': return '&amp;';
+    case '\'': return '&apos;';
+    case '"': return '&quot;';
+    default: return char;
+  }
+});
+
 app.get('/sitemap.xml', async (c) => {
   const db = c.var.db;
   const recentThreads = await db
@@ -88,7 +99,7 @@ app.get('/sitemap.xml', async (c) => {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
   
   staticRoutes.forEach((route) => {
-    xml += `  <url>\n    <loc>https://visatk.us${route}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>https://visatk.us${escapeXml(route)}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
   });
   
   recentThreads.forEach((thread) => {
