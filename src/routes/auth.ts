@@ -183,13 +183,10 @@ authRouter.post('/verify-email', zValidator('json', z.object({ token: z.string()
 
   const user = await db.select().from(users).where(eq(users.verificationToken, token)).get();
   
-  // Security protocol: By retaining the nullification constraint, we prevent single-use links
-  // from acting as continuous authentication bypass vectors.
   if (!user) {
     return c.json({ error: 'Invalid or already consumed vector token.' }, 400);
   }
 
-  // Finalize verification state and instantly consume/nullify the token
   await db.update(users).set({ 
     isVerified: true, 
     verificationToken: null 
@@ -215,7 +212,7 @@ authRouter.post('/forgot-password', zValidator('json', z.object({ email: z.strin
   if (!user) return c.json({ message: "If an account exists, a recovery sequence has been dispatched." });
 
   const resetToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-  const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 Hour
+  const resetTokenExpiry = new Date(Date.now() + 3600000); 
 
   await db.update(users).set({ resetToken, resetTokenExpiry }).where(eq(users.id, user.id));
 
@@ -297,7 +294,7 @@ authRouter.get('/github/callback', async (c) => {
     const githubUser = await userRes.json() as any;
     const emails = await emailRes.json() as any[];
     
-    const primaryEmail = emails.find(e => e.primary && e.verified) || emails.find(e => e.verified) || emails[0];
+    const primaryEmail = emails.find((e: any) => e.primary && e.verified) || emails.find((e: any) => e.verified) || emails[0];
     if (!primaryEmail || !primaryEmail.email) throw new Error('Verified email vector required.');
 
     const db = c.var.db || drizzle(c.env.DB);
