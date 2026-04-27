@@ -8,6 +8,9 @@ import type { AppEnv } from '../index';
 
 export const chatRouter = new Hono<AppEnv>();
 
+// Explicit numeric coercion safeguards against injection and malformed parameters
+const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
 chatRouter.get('/conversations', requireAuth, async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
@@ -32,7 +35,7 @@ chatRouter.get('/conversations', requireAuth, async (c) => {
   return c.json(userConvos);
 });
 
-chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ targetUserId: z.number() })), async (c) => {
+chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ targetUserId: z.number().int().positive() })), async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
   const { targetUserId } = c.req.valid('json');
@@ -55,13 +58,13 @@ chatRouter.post('/conversations', requireAuth, zValidator('json', z.object({ tar
   return c.json({ id: conv.id, lastMessageAt: conv.lastMessageAt, targetUser });
 });
 
-chatRouter.get('/messages/:id', requireAuth, async (c) => {
+chatRouter.get('/messages/:id', requireAuth, zValidator('param', idParamSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
-  const conversationId = parseInt(c.req.param('id') as string); // FIX
+  const { id: conversationId } = c.req.valid('param');
   
-  const limit = Math.min(100, parseInt((c.req.query('limit') || '50') as string));
-  const offset = parseInt((c.req.query('offset') || '0') as string);
+  const limit = Math.min(100, parseInt((c.req.query('limit') || '50') as string) || 50);
+  const offset = parseInt((c.req.query('offset') || '0') as string) || 0;
   
   const conv = await db.select().from(conversations).where(eq(conversations.id, conversationId)).get();
   if (!conv || (conv.user1Id !== user.id && conv.user2Id !== user.id)) {
@@ -96,12 +99,12 @@ chatRouter.get('/directory', requireAuth, async (c) => {
   return c.json(directory);
 });
 
-chatRouter.post('/messages/:id', requireAuth, zValidator('json', z.object({
+chatRouter.post('/messages/:id', requireAuth, zValidator('param', idParamSchema), zValidator('json', z.object({
   content: z.string().optional(), fileUrl: z.string().nullable().optional(), fileName: z.string().nullable().optional(), fileType: z.string().nullable().optional()
 })), async (c) => {
   const db = c.var.db;
   const user = c.var.user!;
-  const conversationId = parseInt(c.req.param('id') as string); // FIX
+  const { id: conversationId } = c.req.valid('param');
   const payload = c.req.valid('json');
 
   if (!payload.content && !payload.fileUrl) return c.json({ error: 'Empty payload' }, 400);
