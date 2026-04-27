@@ -16,6 +16,7 @@ export type ForumEnv = {
 export const forumRouter = new Hono<ForumEnv>();
 
 const getSecret = (c: any): string => c.env.JWT_SECRET || 'super-secure-dev-secret-123';
+const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 const requireModerator = async (c: any, next: any) => {
   const user = c.get('user');
@@ -85,11 +86,9 @@ forumRouter.get('/threads', async (c) => {
   }
 });
 
-forumRouter.get('/threads/:id', async (c) => {
+forumRouter.get('/threads/:id', zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id') as string); // FIX
-
-  if (isNaN(threadId)) return c.json({ error: 'Malformed identifier.' }, 400);
+  const { id: threadId } = c.req.valid('param');
 
   const thread = await db.select({
     id: threads.id,
@@ -198,10 +197,10 @@ forumRouter.post('/threads', requireAuth, zValidator('json', createThreadSchema)
   }
 });
 
-forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
+forumRouter.post('/threads/:id/unlock', requireAuth, zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
   const userPayload = c.get('user');
-  const threadId = parseInt(c.req.param('id') as string); // FIX
+  const { id: threadId } = c.req.valid('param');
 
   const user = await db.select({ id: users.id, points: users.points, role: users.role, isVip: users.isVip }).from(users).where(eq(users.id, userPayload.id)).get();
   if (!user) return c.json({ error: 'Identity node invalid' }, 401);
@@ -235,10 +234,10 @@ forumRouter.post('/threads/:id/unlock', requireAuth, async (c) => {
 
 const replySchema = z.object({ content: z.string().min(2).max(5000) });
 
-forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySchema), async (c) => {
+forumRouter.post('/threads/:id/replies', requireAuth, zValidator('param', idParamSchema), zValidator('json', replySchema), async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const threadId = parseInt(c.req.param('id') as string); // FIX
+  const { id: threadId } = c.req.valid('param');
   const { content } = c.req.valid('json');
 
   const thread = await db.select({ isLocked: threads.isLocked }).from(threads).where(eq(threads.id, threadId)).get();
@@ -261,13 +260,13 @@ forumRouter.post('/threads/:id/replies', requireAuth, zValidator('json', replySc
   }
 });
 
-forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
+forumRouter.post('/vote/:type/:id', requireAuth, zValidator('param', z.object({
+  type: z.enum(['thread', 'reply']),
+  id: z.coerce.number().int().positive()
+})), async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const type = c.req.param('type') as string; // FIX
-  const id = parseInt(c.req.param('id') as string); // FIX
-
-  if (isNaN(id) || (type !== 'thread' && type !== 'reply')) return c.json({ error: 'Invalid parameters' }, 400);
+  const { type, id } = c.req.valid('param');
 
   try {
     if (type === 'thread') {
@@ -304,10 +303,10 @@ forumRouter.post('/vote/:type/:id', requireAuth, async (c) => {
   }
 });
 
-forumRouter.delete('/replies/:id', requireAuth, async (c) => {
+forumRouter.delete('/replies/:id', requireAuth, zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
   const user = c.get('user');
-  const replyId = parseInt(c.req.param('id') as string); // FIX
+  const { id: replyId } = c.req.valid('param');
 
   const reply = await db.select().from(replies).where(eq(replies.id, replyId)).get();
   if (!reply) return c.json({ error: 'Reply not found' }, 404);
@@ -320,31 +319,37 @@ forumRouter.delete('/replies/:id', requireAuth, async (c) => {
   return c.json({ success: true });
 });
 
-forumRouter.patch('/threads/:id/pin', requireAuth, requireModerator, async (c) => {
+forumRouter.patch('/threads/:id/pin', requireAuth, requireModerator, zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id') as string); // FIX
+  const { id: threadId } = c.req.valid('param');
+  
   const thread = await db.select({ isPinned: threads.isPinned }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
+  
   const result = await db.update(threads).set({ isPinned: !thread.isPinned }).where(eq(threads.id, threadId)).returning();
   return c.json(result[0]);
 });
 
-forumRouter.patch('/threads/:id/lock', requireAuth, requireModerator, async (c) => {
+forumRouter.patch('/threads/:id/lock', requireAuth, requireModerator, zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id') as string); // FIX
+  const { id: threadId } = c.req.valid('param');
+  
   const thread = await db.select({ isLocked: threads.isLocked }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
+  
   const result = await db.update(threads).set({ isLocked: !thread.isLocked }).where(eq(threads.id, threadId)).returning();
   return c.json(result[0]);
 });
 
-forumRouter.delete('/threads/:id', requireAuth, async (c) => {
+forumRouter.delete('/threads/:id', requireAuth, zValidator('param', idParamSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const threadId = parseInt(c.req.param('id') as string); // FIX
+  const { id: threadId } = c.req.valid('param');
   const user = c.get('user');
+  
   const thread = await db.select({ authorId: threads.authorId }).from(threads).where(eq(threads.id, threadId)).get();
   if (!thread) return c.json({ error: 'Thread not found' }, 404);
   if (thread.authorId !== user.id && user.role === 'user') return c.json({ error: 'Forbidden' }, 403);
+  
   await db.delete(threads).where(eq(threads.id, threadId)).execute();
   return c.json({ success: true });
 });
