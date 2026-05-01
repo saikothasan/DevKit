@@ -4,11 +4,11 @@ import { cors } from 'hono/cors';
 import { cache } from 'hono/cache';
 import { drizzle, DrizzleD1Database } from 'drizzle-orm/d1';
 import { desc } from 'drizzle-orm';
+import binExtractor from './routes/bin-extractor';
 
 // Domain imports
 import { threads } from './db/schema';
 import { authRouter } from './routes/auth';
-import { binExtractor } from './routes/bin-extractor';
 import { forumRouter } from './routes/forum';
 import { toolsRouter } from './routes/tools';
 import { chatRouter } from './routes/chat';
