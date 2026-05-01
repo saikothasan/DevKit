@@ -1,39 +1,96 @@
 import { Hono } from 'hono';
 
-// 1. THE FIX: Exporting as a named constant to match your index.ts import
-export const binExtractor = new Hono();
+type Bindings = {
+  // Add your Cloudflare bindings here if needed (e.g., KV, D1)
+};
+
+const binExtractor = new Hono<{ Bindings: Bindings }>();
+
+// Pre-compiled regexes for V8 isolate optimization
+const SEQUENCE_REGEX = /\d{6,}/g; 
+const MII_REGEX = /^[3456]/; // Amex, Visa, Mastercard, Discover
 
 binExtractor.post('/extract', async (c) => {
-  try {
-    // 2. SAFETY: Safely parse JSON to prevent 500 crashes on malformed payloads
-    const body = await c.req.json().catch(() => null);
+  const traceId = crypto.randomUUID(); 
+  const startTime = performance.now(); 
 
-    if (!body || typeof body.text !== 'string' || body.text.trim().length === 0) {
-      return c.json({ success: false, error: 'Valid text payload is required.' }, 400);
+  try {
+    // Infrastructure security: Guard against massive OOM payloads
+    const contentLength = Number(c.req.header('content-length') || 0);
+    const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024; // 5MB limit
+    
+    if (contentLength > MAX_PAYLOAD_SIZE) {
+      return c.json({ 
+        success: false, 
+        error: 'Payload Too Large. Maximum allowed dump size is 5MB.' 
+      }, 413);
     }
 
-    const { text } = body;
+    const body = await c.req.json<{ text?: string; extract8Digit?: boolean }>().catch(() => null);
 
-    // 3. OPTIMIZATION: Single-pass execution. 
-    // \b      : Word boundary
-    // [3-6]   : Must start with 3 (Amex), 4 (Visa), 5 (Mastercard), or 6 (Discover)
-    // \d{5,7} : Followed by 5 to 7 digits (making the total length 6 to 8)
-    // \b      : Word boundary
-    const binRegex = /\b[3-6]\d{5,7}\b/g;
-    const rawMatches = text.match(binRegex) || [];
+    if (!body || typeof body.text !== 'string' || !body.text.trim()) {
+      return c.json({ success: false, error: 'Valid text input is required.' }, 400);
+    }
 
-    // 4. DEDUPLICATION: Native Set is the fastest way to drop duplicates
-    const uniqueBins = [...new Set(rawMatches)];
+    const { text, extract8Digit = false } = body;
+    const targetLength = extract8Digit ? 8 : 6;
+    const validBins = new Set<string>();
+
+    // Lazy Iteration: matchAll yields results one by one, keeping heap usage flat
+    const matches = text.matchAll(SEQUENCE_REGEX);
+
+    for (const match of matches) {
+      const rawSequence = match[0];
+
+      // Fast-path rejection
+      if (!MII_REGEX.test(rawSequence)) continue;
+
+      if (rawSequence.length >= 6 && rawSequence.length <= targetLength) {
+        validBins.add(rawSequence);
+      } else if (rawSequence.length > targetLength) {
+        // Truncate full PANs or longer sequences to the requested BIN length
+        validBins.add(rawSequence.substring(0, targetLength));
+      }
+    }
+
+    const binsArray = Array.from(validBins);
+    const processingTimeMs = Math.round(performance.now() - startTime);
+
+    // Asynchronous background task (does not block the HTTP response)
+    c.executionCtx.waitUntil(
+      (async () => {
+        const telemetryData = {
+          event: 'bin_extraction',
+          traceId,
+          targetFormat: extract8Digit ? 8 : 6,
+          charsProcessed: text.length,
+          binsFound: binsArray.length,
+          processingTimeMs,
+          timestamp: Date.now(),
+        };
+        console.log(JSON.stringify(telemetryData));
+      })()
+    );
 
     return c.json({
       success: true,
-      totalFound: uniqueBins.length,
-      bins: uniqueBins,
-      timestamp: Date.now(),
+      meta: {
+        traceId,
+        processingTimeMs,
+        targetFormat: extract8Digit ? '8-digit' : '6-digit',
+      },
+      totalFound: binsArray.length,
+      bins: binsArray,
     });
+
   } catch (error) {
-    // 5. OBSERVABILITY: Log errors contextually (assuming reqId might be passed from global middleware)
-    console.error('BIN Extraction Fault:', error);
-    return c.json({ success: false, error: 'Failed to process extraction payload.' }, 500);
+    console.error(`[${traceId}] BIN Extraction Error:`, error);
+    return c.json({ 
+      success: false, 
+      error: 'An internal infrastructure error occurred during extraction.',
+      traceId 
+    }, 500);
   }
 });
+
+export default binExtractor;
