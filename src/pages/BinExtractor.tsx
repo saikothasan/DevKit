@@ -1,187 +1,156 @@
-import { useState } from 'react';
-import { Search } from 'lucide-react';
-import { SeoHead } from '../components/SeoHead';
-import { ToolPageHeader } from '../components/ToolPageHeader';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import React, { useState, useCallback } from 'react';
+import { Scissors, Copy, Trash2, Download, Check, AlertCircle } from 'lucide-react';
+import { ToolPageHeader } from '@/components/ToolPageHeader';
+import { SeoHead } from '@/components/SeoHead';
+import { useToast } from '@/context/ToastContext';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
-interface ExtractorResponse {
-  success: boolean;
-  totalFound?: number;
-  bins?: string[];
-  error?: string;
-  meta?: {
-    traceId: string;
-    processingTimeMs: number;
-    targetFormat: string;
-  };
-}
-
-export default function BinExtractor() {
-  const [inputText, setInputText] = useState<string>('');
-  const [extractedBins, setExtractedBins] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [hasExtracted, setHasExtracted] = useState<boolean>(false);
-  const [extract8Digit, setExtract8Digit] = useState<boolean>(false);
-  const [processMetrics, setProcessMetrics] = useState<string | null>(null);
-  
+export const BinExtractor = () => {
+  const [input, setInput] = useState('');
+  const [extracted, setExtracted] = useState<string[]>([]);
+  const [uniqueOnly, setUniqueOnly] = useState(true);
+  const { showToast } = useToast();
   const { copy } = useCopyToClipboard();
 
-  const handleExtract = async () => {
-    if (!inputText.trim()) return;
-
-    setIsProcessing(true);
-    setProcessMetrics(null);
-    try {
-      const response = await fetch('/api/bin-extractor/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, extract8Digit }),
+  const handleExtract = useCallback(() => {
+    // Matches 6 to 8 digit BIN patterns typically found at the start of CC strings
+    const binRegex = /\b\d{6,8}\b/g;
+    const matches = input.match(binRegex) || [];
+    
+    const results = uniqueOnly ? Array.from(new Set(matches)) : matches;
+    
+    setExtracted(results);
+    
+    if (results.length > 0) {
+      showToast({ 
+        title: 'Extraction Complete', 
+        message: `Successfully extracted ${results.length} BINs.`, 
+        type: 'success' 
       });
-
-      const data = (await response.json()) as ExtractorResponse;
-      
-      if (data.success && data.bins) {
-        setExtractedBins(data.bins);
-        setHasExtracted(true);
-        if (data.meta) {
-          setProcessMetrics(`Processed in ${data.meta.processingTimeMs}ms`);
-        }
-      } else {
-        console.error(data.error);
-        alert(data.error || 'Failed to extract BINs');
-      }
-    } catch (error) {
-      console.error('Extraction failed:', error);
-      alert('A network error occurred.');
-    } finally {
-      setIsProcessing(false);
+    } else {
+      showToast({ 
+        title: 'No BINs Found', 
+        message: 'Could not find any 6-8 digit numbers in the input.', 
+        type: 'warning' 
+      });
     }
-  };
+  }, [input, uniqueOnly, showToast]);
 
-  const handleCopyAll = () => {
-    if (extractedBins.length > 0) {
-      copy(extractedBins.join('\n'));
-    }
-  };
-
-  const handleClear = () => {
-    setInputText('');
-    setExtractedBins([]);
-    setHasExtracted(false);
-    setProcessMetrics(null);
+  const handleDownload = () => {
+    const blob = new Blob([extracted.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `extracted_bins_${new Date().getTime()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 p-6 md:p-12">
+    <div className="max-w-6xl mx-auto space-y-6">
       <SeoHead 
-        title="BIN Extractor - Professional Developer Tools" 
-        description="Instantly extract and deduplicate valid Bank Identification Numbers (BINs) from messy text dumps." 
+        title="BIN Extractor - Bulk Card BIN Tools" 
+        description="High-speed professional BIN extractor. Extract 6-8 digit Bank Identification Numbers from bulk data lists instantly."
       />
       
-      <div className="max-w-5xl mx-auto space-y-8">
-        <ToolPageHeader 
-          title="BIN Extractor" 
-          description="Parse raw text dumps, logs, or unstructured data to instantly extract unique Bank Identification Numbers." 
-          badge="Utility"
-          badgeIcon={Search}
-        />
+      <ToolPageHeader 
+        title="BIN Extractor" 
+        description="Extract Bank Identification Numbers (BIN) from any bulk text or card list."
+        icon={Scissors}
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Input Section */}
-          <div className="flex flex-col space-y-4">
-            <div className="flex items-center justify-between">
-              <label htmlFor="raw-text" className="text-sm font-medium tracking-tight">
-                Raw Text Dump
-              </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={extract8Digit}
-                  onChange={(e) => setExtract8Digit(e.target.checked)}
-                  className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 bg-white dark:bg-zinc-900"
-                />
-                Extract modern 8-digit BINs
-              </label>
-            </div>
-            <textarea
-              id="raw-text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your dirty text dump here (e.g., 'Zalando: 475128...' or '377852 - Westpac...')"
-              className="flex-1 min-h-[400px] w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-sm font-mono shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none transition-all"
-            />
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleExtract}
-                disabled={isProcessing || !inputText.trim()}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Input Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-neutral-300">Raw Data Input</label>
+            <button 
+              onClick={() => setInput('')}
+              className="text-xs text-neutral-500 hover:text-red-400 flex items-center gap-1 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" /> Clear
+            </button>
+          </div>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Paste your card list or bulk data here..."
+            className="w-full h-80 p-4 bg-neutral-900 border border-white/10 rounded-2xl text-neutral-200 font-mono text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all resize-none"
+          />
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={uniqueOnly} 
+                onChange={(e) => setUniqueOnly(e.target.checked)}
+                className="hidden"
+              />
+              <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${uniqueOnly ? 'bg-blue-600 border-blue-500' : 'border-white/20 bg-white/5'}`}>
+                {uniqueOnly && <Check className="w-3 h-3 text-white" />}
+              </div>
+              <span className="text-sm text-neutral-400 group-hover:text-neutral-200">Unique Only</span>
+            </label>
+            <button
+              onClick={handleExtract}
+              disabled={!input.trim()}
+              className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+            >
+              Extract BINs
+            </button>
+          </div>
+        </div>
+
+        {/* Results Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-neutral-300">
+              Extracted BINs <span className="ml-2 px-2 py-0.5 bg-white/5 rounded-full text-xs text-neutral-500">{extracted.length}</span>
+            </label>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => copy(extracted.join('\n'))}
+                disabled={extracted.length === 0}
+                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                title="Copy All"
               >
-                {isProcessing ? 'Processing...' : 'Extract BINs'}
+                <Copy className="w-4 h-4" />
               </button>
-              <button
-                onClick={handleClear}
-                className="px-6 py-2.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-medium rounded-lg transition-colors"
+              <button 
+                onClick={handleDownload}
+                disabled={extracted.length === 0}
+                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                title="Download TXT"
               >
-                Clear
+                <Download className="w-4 h-4" />
               </button>
             </div>
           </div>
-
-          {/* Output Section */}
-          <div className="flex flex-col space-y-4">
-            <div className="flex items-center justify-between h-5">
-              <label className="text-sm font-medium tracking-tight">
-                Extracted BINs <span className="text-zinc-500 text-xs ml-2">({extractedBins.length} found)</span>
-              </label>
-              {extractedBins.length > 0 && (
-                <div className="flex items-center gap-4">
-                  {processMetrics && (
-                    <span className="text-xs text-green-600 dark:text-green-400 font-mono">
-                      {processMetrics}
-                    </span>
-                  )}
-                  <button
-                    onClick={handleCopyAll}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                  >
-                    Copy All
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 relative overflow-hidden flex flex-col shadow-inner">
-              {extractedBins.length > 0 ? (
-                <textarea
-                  readOnly
-                  value={extractedBins.join('\n')}
-                  className="w-full h-full min-h-[400px] bg-transparent font-mono text-sm focus:outline-none resize-none"
-                />
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 h-full min-h-[400px]">
-                  <Search className="w-10 h-10 mb-3 opacity-20" />
-                  <p>{hasExtracted ? 'No valid BINs found.' : 'Results will appear here.'}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Telegram Channel Banner */}
-            <div className="mt-4 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4 text-center">
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Need more premium tools, scripts, and bypasses? 
-                <a 
-                  href="https://t.me/drkingbd" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ml-1.5 font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                >
-                  Join @drkingbd on Telegram
-                </a>
-              </p>
+          <div className="w-full h-80 bg-neutral-950 border border-white/5 rounded-2xl overflow-hidden relative group">
+            {extracted.length > 0 ? (
+              <div className="h-full overflow-y-auto p-4 font-mono text-sm grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {extracted.map((bin, index) => (
+                  <div key={`${bin}-${index}`} className="px-3 py-1.5 bg-white/5 border border-white/5 rounded text-blue-400 text-center hover:border-blue-500/50 transition-colors">
+                    {bin}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-neutral-600 space-y-2">
+                <Scissors className="w-8 h-8 opacity-20" />
+                <p className="text-sm">No BINs extracted yet</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+            <div className="text-xs text-neutral-400 leading-relaxed">
+              <strong className="text-neutral-300 block mb-1">Pro Tip:</strong>
+              This tool automatically filters 6 to 8 digit numerical strings, which are the standard for modern IIN/BIN identification. For best results, paste raw card data like <code className="text-blue-400">411111xxxxxxxxxx|MM|YY|CVV</code>.
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-}
+};
