@@ -9,32 +9,21 @@ export const BinExtractor = () => {
   const [input, setInput] = useState('');
   const [extracted, setExtracted] = useState<string[]>([]);
   const [uniqueOnly, setUniqueOnly] = useState(true);
-  const { showToast } = useToast();
+  const { toast } = useToast();
   const { copy } = useCopyToClipboard();
 
   const handleExtract = useCallback(() => {
-    // Matches 6 to 8 digit BIN patterns typically found at the start of CC strings
     const binRegex = /\b\d{6,8}\b/g;
     const matches = input.match(binRegex) || [];
-    
     const results = uniqueOnly ? Array.from(new Set(matches)) : matches;
-    
     setExtracted(results);
-    
+
     if (results.length > 0) {
-      showToast({ 
-        title: 'Extraction Complete', 
-        message: `Successfully extracted ${results.length} BINs.`, 
-        type: 'success' 
-      });
+      toast(`Successfully extracted ${results.length} BINs.`, 'success');
     } else {
-      showToast({ 
-        title: 'No BINs Found', 
-        message: 'Could not find any 6-8 digit numbers in the input.', 
-        type: 'warning' 
-      });
+      toast('Could not find any 6-8 digit numbers in the input.', 'warning');
     }
-  }, [input, uniqueOnly, showToast]);
+  }, [input, uniqueOnly, toast]);
 
   const handleDownload = () => {
     const blob = new Blob([extracted.join('\n')], { type: 'text/plain' });
@@ -48,15 +37,14 @@ export const BinExtractor = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <SeoHead 
-        title="BIN Extractor - Bulk Card BIN Tools" 
+      <SeoHead
+        title="BIN Extractor - Bulk Card BIN Tools"
         description="High-speed professional BIN extractor. Extract 6-8 digit Bank Identification Numbers from bulk data lists instantly."
       />
-      
-      <ToolPageHeader 
-        title="BIN Extractor" 
+
+      <ToolPageHeader
+        title="BIN Extractor"
         description="Extract Bank Identification Numbers (BIN) from any bulk text or card list."
-        icon={Scissors}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -64,7 +52,7 @@ export const BinExtractor = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-neutral-300">Raw Data Input</label>
-            <button 
+            <button
               onClick={() => setInput('')}
               className="text-xs text-neutral-500 hover:text-red-400 flex items-center gap-1 transition-colors"
             >
@@ -79,9 +67,9 @@ export const BinExtractor = () => {
           />
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 cursor-pointer group">
-              <input 
-                type="checkbox" 
-                checked={uniqueOnly} 
+              <input
+                type="checkbox"
+                checked={uniqueOnly}
                 onChange={(e) => setUniqueOnly(e.target.checked)}
                 className="hidden"
               />
@@ -107,25 +95,25 @@ export const BinExtractor = () => {
               Extracted BINs <span className="ml-2 px-2 py-0.5 bg-white/5 rounded-full text-xs text-neutral-500">{extracted.length}</span>
             </label>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => copy(extracted.join('\n'))}
                 disabled={extracted.length === 0}
-                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Copy All"
               >
                 <Copy className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={handleDownload}
                 disabled={extracted.length === 0}
-                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                className="p-2 text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Download TXT"
               >
                 <Download className="w-4 h-4" />
               </button>
             </div>
           </div>
-          <div className="w-full h-80 bg-neutral-950 border border-white/5 rounded-2xl overflow-hidden relative group">
+          <div className="w-full h-80 bg-neutral-950 border border-white/5 rounded-2xl overflow-hidden">
             {extracted.length > 0 ? (
               <div className="h-full overflow-y-auto p-4 font-mono text-sm grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {extracted.map((bin, index) => (
@@ -141,7 +129,7 @@ export const BinExtractor = () => {
               </div>
             )}
           </div>
-          
+
           <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
             <div className="text-xs text-neutral-400 leading-relaxed">
