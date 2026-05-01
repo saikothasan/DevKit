@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { SeoHead } from '../components/SeoHead';
 import { ToolPageHeader } from '../components/ToolPageHeader';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+
+// Define the expected shape of your API response to fix 'unknown' type errors
+interface ExtractorResponse {
+  success: boolean;
+  totalFound?: number;
+  bins?: string[];
+  error?: string;
+  timestamp?: number;
+}
 
 export default function BinExtractor() {
   const [inputText, setInputText] = useState<string>('');
@@ -9,7 +18,8 @@ export default function BinExtractor() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [hasExtracted, setHasExtracted] = useState<boolean>(false);
   
-  const { copyToClipboard } = useCopyToClipboard();
+  // Use 'copy' based on your useCopyToClipboard hook signature
+  const { copy } = useCopyToClipboard();
 
   const handleExtract = async () => {
     if (!inputText.trim()) return;
@@ -22,9 +32,10 @@ export default function BinExtractor() {
         body: JSON.stringify({ text: inputText }),
       });
 
-      const data = await response.json();
+      // Assert the type of the JSON response
+      const data = (await response.json()) as ExtractorResponse;
       
-      if (data.success) {
+      if (data.success && data.bins) {
         setExtractedBins(data.bins);
         setHasExtracted(true);
       } else {
@@ -40,7 +51,7 @@ export default function BinExtractor() {
 
   const handleCopyAll = () => {
     if (extractedBins.length > 0) {
-      copyToClipboard(extractedBins.join('\n'));
+      copy(extractedBins.join('\n'));
     }
   };
 
@@ -61,6 +72,8 @@ export default function BinExtractor() {
         <ToolPageHeader 
           title="BIN Extractor" 
           description="Parse raw text dumps, logs, or unstructured data to instantly extract unique Bank Identification Numbers." 
+          badge="Utility"
+          badgeIcon="Search" // Note: If your setup requires a Lucide component here instead of a string (e.g., {Search}), you can swap this.
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
