@@ -1,34 +1,39 @@
 import { Hono } from 'hono';
 
-const binExtractor = new Hono();
+// 1. THE FIX: Exporting as a named constant to match your index.ts import
+export const binExtractor = new Hono();
 
 binExtractor.post('/extract', async (c) => {
   try {
-    const body = await c.req.json<{ text: string }>();
-    const { text } = body;
+    // 2. SAFETY: Safely parse JSON to prevent 500 crashes on malformed payloads
+    const body = await c.req.json().catch(() => null);
 
-    if (!text || typeof text !== 'string') {
-      return c.json({ success: false, error: 'Valid text input is required.' }, 400);
+    if (!body || typeof body.text !== 'string' || body.text.trim().length === 0) {
+      return c.json({ success: false, error: 'Valid text payload is required.' }, 400);
     }
 
-    // High-level extraction logic: matches 6 to 8 digit consecutive numbers commonly used as BINs
-    const binRegex = /\b\d{6,8}\b/g;
+    const { text } = body;
+
+    // 3. OPTIMIZATION: Single-pass execution. 
+    // \b      : Word boundary
+    // [3-6]   : Must start with 3 (Amex), 4 (Visa), 5 (Mastercard), or 6 (Discover)
+    // \d{5,7} : Followed by 5 to 7 digits (making the total length 6 to 8)
+    // \b      : Word boundary
+    const binRegex = /\b[3-6]\d{5,7}\b/g;
     const rawMatches = text.match(binRegex) || [];
 
-    // Deduplicate and filter (Valid BINs typically start with 3, 4, 5, or 6)
+    // 4. DEDUPLICATION: Native Set is the fastest way to drop duplicates
     const uniqueBins = [...new Set(rawMatches)];
-    const validBins = uniqueBins.filter(bin => /^[3456]/.test(bin));
 
     return c.json({
       success: true,
-      totalFound: validBins.length,
-      bins: validBins,
+      totalFound: uniqueBins.length,
+      bins: uniqueBins,
       timestamp: Date.now(),
     });
   } catch (error) {
-    console.error('BIN Extraction Error:', error);
-    return c.json({ success: false, error: 'Failed to process text payload.' }, 500);
+    // 5. OBSERVABILITY: Log errors contextually (assuming reqId might be passed from global middleware)
+    console.error('BIN Extraction Fault:', error);
+    return c.json({ success: false, error: 'Failed to process extraction payload.' }, 500);
   }
 });
-
-export default binExtractor;
