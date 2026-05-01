@@ -1,6 +1,7 @@
 import { 
   ShieldCheck, 
-  CreditCard, 
+  CreditCard,
+	SearchIcon,
   Terminal, 
   MapPin, 
   MessageSquare, 
@@ -25,8 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/test-cards', icon: Terminal, label: 'Vector Gen', group: 'Utilities' },
   { to: '/fake-address', icon: MapPin, label: 'Mock Identity', group: 'Utilities' },
   { to: '/ip', icon: Mail, label: 'IP Check', group: 'Utilities' },
-  
-  // Community & Communications Layer
+  { to: '/bin-extractor', icon: SearchIcon, label: 'BIN Extractor', group: 'Utilities' },
   { to: '/', icon: MessageSquare, label: 'Discussion Board', group: 'Community' },
   { to: '/messages', icon: Network, label: 'Live Chat', group: 'Community', badge: 'LIVE' },
   
