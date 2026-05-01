@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Scissors, Copy, Trash2, Download, Check, AlertCircle } from 'lucide-react';
 import { ToolPageHeader } from '@/components/ToolPageHeader';
 import { SeoHead } from '@/components/SeoHead';
