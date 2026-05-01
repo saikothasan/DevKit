@@ -43,6 +43,8 @@ export const BinExtractor = () => {
       />
 
       <ToolPageHeader
+        badge="BIN Extractor"
+        badgeIcon={Scissors}
         title="BIN Extractor"
         description="Extract Bank Identification Numbers (BIN) from any bulk text or card list."
       />
@@ -73,10 +75,16 @@ export const BinExtractor = () => {
                 onChange={(e) => setUniqueOnly(e.target.checked)}
                 className="hidden"
               />
-              <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${uniqueOnly ? 'bg-blue-600 border-blue-500' : 'border-white/20 bg-white/5'}`}>
+              <div
+                className="w-4 h-4 rounded border transition-all flex items-center justify-center"
+                style={uniqueOnly
+                  ? { background: '#2563eb', borderColor: '#3b82f6' }
+                  : { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.2)' }
+                }
+              >
                 {uniqueOnly && <Check className="w-3 h-3 text-white" />}
               </div>
-              <span className="text-sm text-neutral-400 group-hover:text-neutral-200">Unique Only</span>
+              <span className="text-sm text-neutral-400 group-hover:text-neutral-200 transition-colors">Unique Only</span>
             </label>
             <button
               onClick={handleExtract}
@@ -92,7 +100,10 @@ export const BinExtractor = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-neutral-300">
-              Extracted BINs <span className="ml-2 px-2 py-0.5 bg-white/5 rounded-full text-xs text-neutral-500">{extracted.length}</span>
+              Extracted BINs{' '}
+              <span className="ml-2 px-2 py-0.5 bg-white/5 rounded-full text-xs text-neutral-500">
+                {extracted.length}
+              </span>
             </label>
             <div className="flex gap-2">
               <button
@@ -113,11 +124,15 @@ export const BinExtractor = () => {
               </button>
             </div>
           </div>
+
           <div className="w-full h-80 bg-neutral-950 border border-white/5 rounded-2xl overflow-hidden">
             {extracted.length > 0 ? (
-              <div className="h-full overflow-y-auto p-4 font-mono text-sm grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="h-full overflow-y-auto p-4 font-mono text-sm grid grid-cols-2 sm:grid-cols-3 gap-2 content-start">
                 {extracted.map((bin, index) => (
-                  <div key={`${bin}-${index}`} className="px-3 py-1.5 bg-white/5 border border-white/5 rounded text-blue-400 text-center hover:border-blue-500/50 transition-colors">
+                  <div
+                    key={`${bin}-${index}`}
+                    className="px-3 py-1.5 bg-white/5 border border-white/5 rounded text-blue-400 text-center hover:border-blue-500/50 transition-colors"
+                  >
                     {bin}
                   </div>
                 ))}
@@ -134,7 +149,9 @@ export const BinExtractor = () => {
             <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
             <div className="text-xs text-neutral-400 leading-relaxed">
               <strong className="text-neutral-300 block mb-1">Pro Tip:</strong>
-              This tool automatically filters 6 to 8 digit numerical strings, which are the standard for modern IIN/BIN identification. For best results, paste raw card data like <code className="text-blue-400">411111xxxxxxxxxx|MM|YY|CVV</code>.
+              This tool automatically filters 6 to 8 digit numerical strings, which are the standard
+              for modern IIN/BIN identification. For best results, paste raw card data like{' '}
+              <code className="text-blue-400">411111xxxxxxxxxx|MM|YY|CVV</code>.
             </div>
           </div>
         </div>
