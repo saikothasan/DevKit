@@ -7,6 +7,7 @@ import { desc } from 'drizzle-orm';
 
 import { threads } from './db/schema';
 import { authRouter } from './routes/auth';
+import { binExtractorRoute } from './routes/bin-extractor';
 import { forumRouter } from './routes/forum';
 import { toolsRouter } from './routes/tools';
 import { chatRouter } from './routes/chat';
@@ -56,6 +57,7 @@ app.use('/api/*', cors({
 }));
 
 app.route('/api/auth', authRouter);
+app.route('/api/bin-extractor', binExtractorRoute);
 app.route('/api/forum', forumRouter);
 app.route('/api/tools', toolsRouter);
 app.route('/api/chat', chatRouter);
