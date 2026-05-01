@@ -1,101 +1,131 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Search, 
-  CreditCard, 
-  Scissors, 
-  Globe, 
-  MapPin, 
+import {
+  LayoutDashboard,
+  Search,
+  CreditCard,
+  Scissors,
+  Globe,
+  MapPin,
   MessageSquare,
   ShieldCheck,
-  ChevronRight
+  ExternalLink,
 } from 'lucide-react';
 import { Logo } from '../Logo';
 
-const navigation = [
+type NavChild = { name: string; href: string; icon: React.ElementType };
+type NavGroup = { name: string; children: NavChild[] };
+type NavItem = { name: string; href: string; icon: React.ElementType };
+
+const navigation: (NavItem | NavGroup)[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { 
-    name: 'Card Tools', 
+  {
+    name: 'Card Tools',
     children: [
-      { name: 'Bin Checker', href: '/bin-checker', icon: Search },
-      { name: 'Bin Extractor', href: '/bin-extractor', icon: Scissors },
-      { name: 'Card Checker', href: '/card-checker', icon: ShieldCheck },
-      { name: 'Test Cards', href: '/test-cards', icon: CreditCard },
-    ]
+      { name: 'Bin Checker',   href: '/bin-checker',   icon: Search      },
+      { name: 'Bin Extractor', href: '/bin-extractor', icon: Scissors    },
+      { name: 'Card Checker',  href: '/card-checker',  icon: ShieldCheck },
+      { name: 'Test Cards',    href: '/test-cards',    icon: CreditCard  },
+    ],
   },
-  { 
-    name: 'Network & Info', 
+  {
+    name: 'Network & Info',
     children: [
-      { name: 'IP Check', href: '/ip-check', icon: Globe },
-      { name: 'Fake Address', href: '/fake-address', icon: MapPin },
-    ]
+      { name: 'IP Check',      href: '/ip',      icon: Globe  },
+      { name: 'Fake Address',  href: '/fake-address',  icon: MapPin },
+    ],
   },
-  { name: 'Community', href: '/forum', icon: MessageSquare },
+  { name: 'Community', href: '/', icon: MessageSquare },
 ];
+
+function isGroup(item: NavItem | NavGroup): item is NavGroup {
+  return 'children' in item;
+}
 
 export const Sidebar = () => {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-white/5 bg-neutral-950/50 backdrop-blur-xl lg:flex">
-      <div className="flex h-16 items-center px-6 border-b border-white/5">
-        <Logo className="h-8 w-auto" />
+    <aside className="fixed left-0 top-0 hidden h-screen w-60 flex-col lg:flex"
+      style={{ background: 'rgba(9,9,11,0.85)', borderRight: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(20px)' }}
+    >
+      {/* Logo */}
+      <div className="flex h-16 shrink-0 items-center px-5"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+      >
+        <Logo className="h-7 w-auto" />
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-none">
-        {navigation.map((item) => (
-          <div key={item.name} className="space-y-1">
-            {item.children ? (
-              <>
-                <h3 className="px-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                  {item.name}
-                </h3>
-                <div className="mt-2 space-y-1">
-                  {item.children.map((child) => (
-                    <SidebarItem key={child.name} item={child} isActive={location.pathname === child.href} />
-                  ))}
-                </div>
-              </>
-            ) : (
-              <SidebarItem item={item} isActive={location.pathname === item.href} />
-            )}
-          </div>
-        ))}
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-6 scrollbar-none">
+        {navigation.map((item) =>
+          isGroup(item) ? (
+            <div key={item.name}>
+              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-600">
+                {item.name}
+              </p>
+              <div className="space-y-0.5">
+                {item.children.map((child) => (
+                  <SidebarLink key={child.href} item={child} active={location.pathname === child.href} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div key={(item as NavItem).href} className="space-y-0.5">
+              <SidebarLink item={item as NavItem} active={location.pathname === (item as NavItem).href} />
+            </div>
+          )
+        )}
       </nav>
 
-      <div className="p-4 border-t border-white/5 bg-neutral-900/20">
-        <a 
-          href="https://t.me/drkingbd" 
-          target="_blank" 
+      {/* Footer */}
+      <div className="shrink-0 px-3 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <a
+          href="https://t.me/drkingbd"
+          target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 px-3 py-2 text-sm text-sky-400 hover:bg-sky-500/10 rounded-lg transition-colors group"
+          className="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-200"
+          style={{ color: '#38bdf8' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(56,189,248,0.08)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
-          <MessageSquare className="w-4 h-4" />
-          <span>Join Community</span>
-          <ChevronRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+          <MessageSquare className="h-4 w-4 shrink-0" />
+          <span className="font-medium">Join Community</span>
+          <ExternalLink className="ml-auto h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
         </a>
       </div>
     </aside>
   );
 };
 
-const SidebarItem = ({ item, isActive }: { item: any, isActive: boolean }) => (
+const SidebarLink = ({ item, active }: { item: NavChild | NavItem; active: boolean }) => (
   <NavLink
     to={item.href}
-    className={cn(
-      "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl transition-all duration-200 group",
-      isActive 
-        ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]" 
-        : "text-neutral-400 hover:text-white hover:bg-white/5"
-    )}
+    className="group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium outline-none transition-all duration-150"
+    style={{
+      color: active ? '#fff' : '#737373',
+      background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+    }}
+    onMouseEnter={e => {
+      if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+      if (!active) e.currentTarget.style.color = '#d4d4d4';
+    }}
+    onMouseLeave={e => {
+      if (!active) e.currentTarget.style.background = 'transparent';
+      if (!active) e.currentTarget.style.color = '#737373';
+    }}
   >
-    <item.icon className={cn(
-      "w-4 h-4 transition-colors",
-      isActive ? "text-blue-400" : "group-hover:text-neutral-200"
-    )} />
-    {item.name}
-    {isActive && (
-      <div className="ml-auto w-1 h-4 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+    {/* Active glow bar */}
+    {active && (
+      <span
+        className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
+        style={{ background: '#3b82f6', boxShadow: '0 0 10px rgba(59,130,246,0.7)' }}
+      />
     )}
+
+    <item.icon
+      className="h-4 w-4 shrink-0 transition-colors duration-150"
+      style={{ color: active ? '#60a5fa' : 'inherit' }}
+    />
+    <span>{item.name}</span>
   </NavLink>
 );
