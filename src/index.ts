@@ -5,6 +5,7 @@ import { cache } from 'hono/cache';
 import { drizzle, DrizzleD1Database } from 'drizzle-orm/d1';
 import { desc } from 'drizzle-orm';
 
+// Domain imports
 import { threads } from './db/schema';
 import { authRouter } from './routes/auth';
 import { binExtractor } from './routes/bin-extractor';
@@ -36,26 +37,37 @@ export type AppEnv = {
 
 const app = new Hono<AppEnv>();
 
-// Edge Observability & Resource Lifecycle Middleware
+// --- Edge Observability & Resource Lifecycle Middleware ---
 app.use('*', async (c, next) => {
   c.set('reqId', crypto.randomUUID());
-  c.set('db', drizzle(c.env.DB)); // Single instantiation per request vector
+  // Drizzle wrapper instantiation per request vector is optimal for D1
+  c.set('db', drizzle(c.env.DB)); 
   await next();
 });
 
+// --- Security Boundaries ---
 app.use('*', secureHeaders({
   xXssProtection: '1; mode=block',
   xFrameOptions: 'DENY',
   strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+  },
 }));
 
+// --- CORS Policy ---
 app.use('/api/*', cors({
   origin: ['https://visatk.us', 'http://localhost:5173'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE'],
   credentials: true,
+  maxAge: 86400, // Cache preflight requests for 24 hours to reduce Edge latency
 }));
 
+// --- API Routing Matrix ---
 app.route('/api/auth', authRouter);
 app.route('/api/bin-extractor', binExtractor);
 app.route('/api/forum', forumRouter);
@@ -64,9 +76,10 @@ app.route('/api/chat', chatRouter);
 app.route('/api/upload', uploadRouter);
 app.route('/api/vip', vipRouter);
 
-// Global Error boundaries
+// --- Global Fault Tolerance ---
 app.onError((err, c) => {
   console.error(`[${c.var.reqId}] Execution Fault:`, err);
+  // Do not leak internal stack traces in production responses
   return c.json({ error: 'Internal Edge Execution Failure.', reqId: c.var.reqId }, 500);
 });
 
@@ -74,45 +87,74 @@ app.notFound((c) => {
   return c.json({ error: 'Endpoint untraceable.', reqId: c.var.reqId }, 404);
 });
 
-app.get('/robots.txt', cache({ cacheName: 'seo-cache', cacheControl: 'max-age=86400' }), (c) => {
-  return c.text('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?token=*\nSitemap: https://visatk.us/sitemap.xml');
-});
+// --- SEO & Static Asset Layer ---
 
-const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, (char) => {
-  switch (char) {
-    case '<': return '&lt;';
-    case '>': return '&gt;';
-    case '&': return '&amp;';
-    case '\'': return '&apos;';
-    case '"': return '&quot;';
-    default: return char;
+// Cache robots.txt at the Edge via Cloudflare Cache API
+app.get(
+  '/robots.txt',
+  cache({ cacheName: 'seo-cache', cacheControl: 'public, max-age=86400' }),
+  (c) => {
+    return c.text(
+      'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?token=*\nSitemap: https://visatk.us/sitemap.xml'
+    );
   }
-});
+);
 
-app.get('/sitemap.xml', async (c) => {
-  const db = c.var.db;
-  const recentThreads = await db
-    .select({ id: threads.id, updatedAt: threads.updatedAt })
-    .from(threads)
-    .orderBy(desc(threads.updatedAt))
-    .limit(1000);
-
-  const staticRoutes = ['', '/bin-checker', '/card-checker', '/fake-address', '/vip'];
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-  
-  staticRoutes.forEach((route) => {
-    xml += `  <url>\n    <loc>https://visatk.us${escapeXml(route)}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
+// XML Escaping Utility (Optimized for V8)
+const escapeXml = (unsafe: string): string =>
+  unsafe.replace(/[<>&'"]/g, (char) => {
+    switch (char) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return char;
+    }
   });
-  
-  recentThreads.forEach((thread) => {
-    const date = thread.updatedAt ? new Date(thread.updatedAt).toISOString() : new Date().toISOString();
-    xml += `  <url>\n    <loc>https://visatk.us/forum/thread/${thread.id}</loc>\n    <lastmod>${date}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
-  });
-  xml += '</urlset>';
-  
-  c.header('Content-Type', 'application/xml');
-  c.header('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
-  return c.body(xml);
-});
 
-export default { fetch: app.fetch };
+// Dynamic Sitemap Generation
+app.get(
+  '/sitemap.xml',
+  // Hook into Cloudflare Edge Cache to prevent database spamming during bot crawls
+  cache({ cacheName: 'seo-cache', cacheControl: 'public, max-age=3600, stale-while-revalidate=86400' }),
+  async (c) => {
+    const db = c.var.db;
+    
+    // Fetch recent threads from D1
+    const recentThreads = await db
+      .select({ id: threads.id, updatedAt: threads.updatedAt })
+      .from(threads)
+      .orderBy(desc(threads.updatedAt))
+      .limit(1000);
+
+    const staticRoutes = ['', '/bin-checker', '/card-checker', '/fake-address', '/vip'];
+    
+    // Array joining avoids the memory overhead of string concatenation in a loop
+    const staticUrls = staticRoutes.map((route) => `  <url>
+    <loc>https://visatk.us${escapeXml(route)}</loc>
+    <changefreq>daily</changefreq>
+    <priority>${route === '' ? '1.0' : '0.8'}</priority>
+  </url>\n`).join('');
+
+    const dynamicUrls = recentThreads.map((thread) => {
+      const date = thread.updatedAt ? new Date(thread.updatedAt).toISOString() : new Date().toISOString();
+      return `  <url>
+    <loc>https://visatk.us/forum/${thread.id}</loc>
+    <lastmod>${date}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>\n`;
+    }).join('');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${staticUrls}${dynamicUrls}</urlset>`;
+
+    // hono/cache sets the Cache-Control automatically based on the middleware config, 
+    // but the Content-Type header must be explicit for the browser/crawler.
+    c.header('Content-Type', 'application/xml; charset=utf-8');
+    return c.body(xml);
+  }
+);
+
+// Idiomatic Hono Export for Cloudflare Workers
+export default app;
