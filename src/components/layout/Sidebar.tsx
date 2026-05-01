@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   ChevronRight
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Logo } from '../Logo';
 
 const navigation = [
