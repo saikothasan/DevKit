@@ -1,9 +1,9 @@
 import { useState } from 'react';
+import { Search } from 'lucide-react';
 import { SeoHead } from '../components/SeoHead';
 import { ToolPageHeader } from '../components/ToolPageHeader';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
-// Define the expected shape of your API response to fix 'unknown' type errors
 interface ExtractorResponse {
   success: boolean;
   totalFound?: number;
@@ -18,7 +18,6 @@ export default function BinExtractor() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [hasExtracted, setHasExtracted] = useState<boolean>(false);
   
-  // Use 'copy' based on your useCopyToClipboard hook signature
   const { copy } = useCopyToClipboard();
 
   const handleExtract = async () => {
@@ -32,7 +31,6 @@ export default function BinExtractor() {
         body: JSON.stringify({ text: inputText }),
       });
 
-      // Assert the type of the JSON response
       const data = (await response.json()) as ExtractorResponse;
       
       if (data.success && data.bins) {
@@ -40,7 +38,6 @@ export default function BinExtractor() {
         setHasExtracted(true);
       } else {
         console.error(data.error);
-        // Integrate with ToastContext here if needed
       }
     } catch (error) {
       console.error('Extraction failed:', error);
@@ -73,7 +70,7 @@ export default function BinExtractor() {
           title="BIN Extractor" 
           description="Parse raw text dumps, logs, or unstructured data to instantly extract unique Bank Identification Numbers." 
           badge="Utility"
-          badgeIcon="Search" // Note: If your setup requires a Lucide component here instead of a string (e.g., {Search}), you can swap this.
+          badgeIcon={Search}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -139,7 +136,6 @@ export default function BinExtractor() {
               )}
             </div>
 
-            {/* Promotional Banner */}
             <div className="mt-4 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4 text-center">
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 Need more premium tools, scripts, and bypasses? 
