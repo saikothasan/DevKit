@@ -154,3 +154,5 @@ export const BinExtractor = () => {
     </div>
   );
 };
+
+export default BinExtractor;
