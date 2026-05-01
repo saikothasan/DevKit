@@ -9,7 +9,11 @@ interface ExtractorResponse {
   totalFound?: number;
   bins?: string[];
   error?: string;
-  timestamp?: number;
+  meta?: {
+    traceId: string;
+    processingTimeMs: number;
+    targetFormat: string;
+  };
 }
 
 export default function BinExtractor() {
@@ -17,6 +21,8 @@ export default function BinExtractor() {
   const [extractedBins, setExtractedBins] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [hasExtracted, setHasExtracted] = useState<boolean>(false);
+  const [extract8Digit, setExtract8Digit] = useState<boolean>(false);
+  const [processMetrics, setProcessMetrics] = useState<string | null>(null);
   
   const { copy } = useCopyToClipboard();
 
@@ -24,11 +30,12 @@ export default function BinExtractor() {
     if (!inputText.trim()) return;
 
     setIsProcessing(true);
+    setProcessMetrics(null);
     try {
       const response = await fetch('/api/bin-extractor/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText }),
+        body: JSON.stringify({ text: inputText, extract8Digit }),
       });
 
       const data = (await response.json()) as ExtractorResponse;
@@ -36,11 +43,16 @@ export default function BinExtractor() {
       if (data.success && data.bins) {
         setExtractedBins(data.bins);
         setHasExtracted(true);
+        if (data.meta) {
+          setProcessMetrics(`Processed in ${data.meta.processingTimeMs}ms`);
+        }
       } else {
         console.error(data.error);
+        alert(data.error || 'Failed to extract BINs');
       }
     } catch (error) {
       console.error('Extraction failed:', error);
+      alert('A network error occurred.');
     } finally {
       setIsProcessing(false);
     }
@@ -56,13 +68,14 @@ export default function BinExtractor() {
     setInputText('');
     setExtractedBins([]);
     setHasExtracted(false);
+    setProcessMetrics(null);
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 p-6 md:p-12">
       <SeoHead 
         title="BIN Extractor - Professional Developer Tools" 
-        description="Instantly extract and deduplicate valid Bank Identification Numbers (BINs) from any raw text dump." 
+        description="Instantly extract and deduplicate valid Bank Identification Numbers (BINs) from messy text dumps." 
       />
       
       <div className="max-w-5xl mx-auto space-y-8">
@@ -76,14 +89,25 @@ export default function BinExtractor() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Input Section */}
           <div className="flex flex-col space-y-4">
-            <label htmlFor="raw-text" className="text-sm font-medium tracking-tight">
-              Raw Text Dump
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="raw-text" className="text-sm font-medium tracking-tight">
+                Raw Text Dump
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={extract8Digit}
+                  onChange={(e) => setExtract8Digit(e.target.checked)}
+                  className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 bg-white dark:bg-zinc-900"
+                />
+                Extract modern 8-digit BINs
+              </label>
+            </div>
             <textarea
               id="raw-text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your text dump here to extract BINs..."
+              placeholder="Paste your dirty text dump here (e.g., 'Zalando: 475128...' or '377852 - Westpac...')"
               className="flex-1 min-h-[400px] w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-sm font-mono shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none transition-all"
             />
             <div className="flex items-center gap-3">
@@ -105,21 +129,28 @@ export default function BinExtractor() {
 
           {/* Output Section */}
           <div className="flex flex-col space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between h-5">
               <label className="text-sm font-medium tracking-tight">
                 Extracted BINs <span className="text-zinc-500 text-xs ml-2">({extractedBins.length} found)</span>
               </label>
               {extractedBins.length > 0 && (
-                <button
-                  onClick={handleCopyAll}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                >
-                  Copy All
-                </button>
+                <div className="flex items-center gap-4">
+                  {processMetrics && (
+                    <span className="text-xs text-green-600 dark:text-green-400 font-mono">
+                      {processMetrics}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleCopyAll}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                  >
+                    Copy All
+                  </button>
+                </div>
               )}
             </div>
             
-            <div className="flex-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 relative overflow-hidden flex flex-col">
+            <div className="flex-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 relative overflow-hidden flex flex-col shadow-inner">
               {extractedBins.length > 0 ? (
                 <textarea
                   readOnly
@@ -128,14 +159,13 @@ export default function BinExtractor() {
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 h-full min-h-[400px]">
-                  <svg className="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+                  <Search className="w-10 h-10 mb-3 opacity-20" />
                   <p>{hasExtracted ? 'No valid BINs found.' : 'Results will appear here.'}</p>
                 </div>
               )}
             </div>
 
+            {/* Telegram Channel Banner */}
             <div className="mt-4 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4 text-center">
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 Need more premium tools, scripts, and bypasses? 
